@@ -7,7 +7,7 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
 CONTROLLER = 'ManeuverAutomaton'
-RACETRACK = 'Spielberg'
+RACETRACK = 'Oschersleben'
 
 if __name__ == '__main__':
 

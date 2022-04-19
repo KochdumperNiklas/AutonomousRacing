@@ -309,7 +309,7 @@ class Controller:
         # Calculta the u change value
         du = sum(abs(mpc_a - poa)) + sum(abs(mpc_delta - pod))
 
-        return mpc_a, mpc_delta, mpc_x, mpc_y, mpc_yaw, mpc_v
+        return mpc_a, mpc_delta, mpc_x, mpc_y, mpc_yaw, mpc_v, path_predict
 
     def mpc_optimization(ref_traj, path_predict, x0, dref):
         """
@@ -399,7 +399,7 @@ class Controller:
         x0 = [vehicle_state.x, vehicle_state.y, vehicle_state.v, vehicle_state.yaw]
 
         # Solve the Linear MPC Control problem
-        self.oa, self.odelta, ox, oy, oyaw, ov = Controller.linear_mpc_control(ref_path, x0, ref_delta, self.oa, self.odelta)
+        self.oa, self.odelta, ox, oy, oyaw, ov, path_predict = Controller.linear_mpc_control(ref_path, x0, ref_delta, self.oa, self.odelta)
 
         if self.odelta is not None:
             di, ai = self.odelta[0], self.oa[0]
@@ -462,7 +462,9 @@ class Controller:
         #print("Vehicle Heading: ", vehicle_state.yaw, "MPC Heading:",oyaw[0], "RefPath Heading:",ref_path[3], "Racline Heading:",cyaw[self.target_ind])
         #print ("Vehicle X:", vehicle_state.x, "Target X:",cx[self.target_ind],"----- Vehicle Y:", vehicle_state.y, " Target Y:",cy[self.target_ind])
 
-        return speed_output, steer_output
+        u = np.concatenate((np.resize(self.oa, (1, self.oa.shape[0])), np.resize(self.odelta, (1, self.odelta.shape[0]))), axis=0)
+
+        return speed_output, steer_output, u, ref_path, path_predict
 
 
 
@@ -510,9 +512,9 @@ class LatticePlanner:
             vehicle_state = State(x=pose_x, y=pose_y, yaw=pose_theta, v=velocity)
 
         # -------------------- Call the MPC Controller ----------------------------------------
-        speed, steering_angle = controller.MPC_Controller(vehicle_state, path)
+        speed, steering_angle, u, ref_path, path_pred = controller.MPC_Controller(vehicle_state, path)
 
-        return speed, steering_angle
+        return speed, steering_angle, u, ref_path, path_pred
 
 """ --------------------------------------------------------------------------------------------------------------------
 Auxiliary Functions
@@ -545,8 +547,9 @@ class MPC_Controller:
         self.raceline = load_raceline(path)                             # load optimal raceline from file
         self.controller_settings()                                      # load controller settings
 
-        # initialize previous control inputs
+        # initialize previous control inputs and raceline index
         self.u_prev = np.zeros((2, self.N))
+        self.ind_prev = 0
 
     def controller_settings(self):
         """settings for the MPC controller"""
@@ -590,7 +593,7 @@ class MPC_Controller:
         x0 = np.array([x, y, v, theta])
         self.u_prev = self.mpc_optimization(x0, ref_traj, pred_traj)
 
-        return v + self.u_prev[0, 0] * self.DT, self.u_prev[1, 0]
+        return v + self.u_prev[0, 0] * self.DT, self.u_prev[1, 0], self.u_prev, ref_traj, pred_traj
 
 
     def mpc_optimization(self, x0, ref_traj, pred_traj):
@@ -649,7 +652,7 @@ class MPC_Controller:
         dist = 0
 
         # get closest raceline point for the current state
-        ind = closest_point(self.raceline[[0, 1], :], np.array([[x], [y]]))
+        ind = self.closest_raceline_point(np.array([[x], [y]]), v)
 
         # loop over all reference trajectory points
         for i in range(self.N + 1):
@@ -663,10 +666,10 @@ class MPC_Controller:
             ref_traj[:, i] = self.raceline[:, ind_new]
 
             # consider heading change from 2pi -> 0 and 0 -> 2pi to guarantee that all headings are the same
-            if self.raceline[2, ind_new] - theta > 5:
-                ref_traj[2, i] = abs(self.raceline[2, ind_new] - 2 * math.pi)
-            elif self.raceline[2, ind_new] - theta < -5:
-                ref_traj[2, i] = abs(self.raceline[2, ind_new] + 2 * math.pi)
+            if self.raceline[3, ind_new] - theta > 5:
+                ref_traj[3, i] = abs(self.raceline[3, ind_new] - 2 * math.pi)
+            elif self.raceline[3, ind_new] - theta < -5:
+                ref_traj[3, i] = abs(self.raceline[3, ind_new] + 2 * math.pi)
 
         return ref_traj
 
@@ -681,6 +684,7 @@ class MPC_Controller:
         # loop over all time steps
         for i in range(self.u_prev.shape[1]):
             pred_traj[:, i+1] = pred_traj[:, i] + self.dynamic_function(pred_traj[:, i], self.u_prev[:, i]) * self.DT
+            pred_traj[2, i+1] = np.max((np.min((pred_traj[2, i+1], self.MAX_SPEED)), self.MIN_SPEED))
 
         return pred_traj
 
@@ -692,7 +696,7 @@ class MPC_Controller:
         return np.array([x[2] * math.cos(x[3]),
                          x[2] * math.sin(x[3]),
                          u[0],
-                         np.max((np.min((x[2] / self.WB * math.tan(u[1]), self.MAX_SPEED)), self.MIN_SPEED))])
+                         x[2] / self.WB * math.tan(u[1])])
 
     def linearized_dynamic_function(self, v, theta, steer):
         """linear time-discrete version of the kinematic single track model"""
@@ -721,6 +725,21 @@ class MPC_Controller:
         C[3] = - self.DT * v * steer / (self.WB * math.cos(steer) ** 2)
 
         return A, B, C
+
+    def closest_raceline_point(self, x, v):
+        """find the point on the raceline that is closest to the current state"""
+
+        # determine search range
+        dist_delta = np.sqrt(np.sum((self.raceline[[0, 1], 1] - self.raceline[[0, 1], 0]) ** 2, axis=0))
+        ind_diff = np.ceil(v*self.DT/dist_delta) + 10
+
+        ind_range = np.mod(np.arange(self.ind_prev, self.ind_prev + ind_diff), self.raceline.shape[1]).astype(int)
+
+        # compute closest point
+        ind = np.argmin(np.sum((self.raceline[0:2, ind_range]-x)**2, axis=0))
+        self.ind_prev = ind_range[ind]
+
+        return ind_range[ind]
 
 
 """ --------------------------------------------------------------------------------------------------------------------
@@ -757,7 +776,7 @@ if __name__ == '__main__':
 
     # Create the simulation environment and inititalize it
     env = gym.make('f110_gym:f110-v0', map=conf.map_path, map_ext=conf.map_ext, num_agents=1,params=params_dict)
-    obs, step_reward, done, info = env.reset(np.array([[conf.sx, conf.sy, conf.stheta]]))
+    obs, step_reward, done, info = env.reset(np.array([[conf.sx, conf.sy+0.5, conf.stheta]]))
     env.render()
 
     # Creating the Motion planner and Controller object that is used in Gym
@@ -782,10 +801,10 @@ if __name__ == '__main__':
             # Call the function for tracking speed and steering
             # MPC specific: We solve the MPC problem only every 6th timestep of the simulation to decrease the sim time
             start = time.time()
-            speed_, steer_ = planner.control(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0], obs['linear_vels_x'][0], path)
+            speed_, steer_, u_, ref_, pred_ = planner.control(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0], obs['linear_vels_x'][0], path)
             print(time.time() - start)
             start = time.time()
-            speed, steer = test.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0], obs['linear_vels_x'][0])
+            speed, steer, u, ref, pred = test.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0], obs['linear_vels_x'][0])
             print(time.time() - start)
             control_count = 0
 

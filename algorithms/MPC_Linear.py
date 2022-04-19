@@ -5,19 +5,21 @@ import cvxpy
 class MPC_Linear:
     """class representing an MPC controller that tracks the optimal raceline"""
 
-    def __init__(self, racetrack, wheelbase, path):
+    def __init__(self, racetrack, params, path):
         """object constructor"""
 
         # load optimal raceline and controller settings
         self.raceline = self.load_raceline(path)
         self.load_controller_settings(racetrack)
-        self.WB = wheelbase
+
+        # wheelbase of the car
+        self.WB = params['lf'] + params['lr']
 
         # initialize previous control inputs and index of closest raceline point
         self.u_prev = np.zeros((2, self.N))
         self.ind_prev = 0
 
-    def plan(self, x, y, theta, v):
+    def plan(self, x, y, theta, v, scans):
         """plan a trajectory using MPC"""
 
         v = np.max((v, 0.1))

@@ -4,8 +4,9 @@ import gym
 import numpy as np
 from argparse import Namespace
 from algorithms.MPC_Linear import MPC_Linear
+from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
-CONTROLLER = 'MPC_Linear'
+CONTROLLER = 'ManeuverAutomaton'
 RACETRACK = 'Spielberg'
 
 if __name__ == '__main__':
@@ -22,12 +23,12 @@ if __name__ == '__main__':
     env.render()
 
     # initialize the motion planner
-    wheelbase = env.params['lf'] + env.params['lr']
-
     if CONTROLLER == 'MPC_Linear':
-        controller = MPC_Linear(RACETRACK, wheelbase, conf.wpt_path)
+        controller = MPC_Linear(RACETRACK, env.params, conf.wpt_path)
+    elif CONTROLLER == 'ManeuverAutomaton':
+        controller = ManeuverAutomaton(RACETRACK, env.params)
     else:
-        print('Specified controller not available!')
+        raise Exception('Specified controller not available!')
 
     # initialize auxiliary variables
     laptime = 0.0
@@ -42,7 +43,7 @@ if __name__ == '__main__':
         if control_count == control_lim:
 
             speed, steer = controller.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0],
-                                           obs['linear_vels_x'][0])
+                                           obs['linear_vels_x'][0], obs['scans'][0])
             control_count = 0
 
         # update the simulation environment

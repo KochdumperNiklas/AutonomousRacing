@@ -6,7 +6,7 @@ perf_num: 6
 
 # map paths
 #map_path: './Spielberg_map'
-map_path: './Spielberg_map'
+map_path: './racetracks/Spielberg/Spielberg_map'
 map_ext: '.png'
 
 # Before Start\ Finish Line: 5.5572091; 0.6514429; 3.4033109
@@ -33,8 +33,8 @@ stheta3: 3.4
 
 
 # raceline path and indices
-wpt_path: './Spielberg_raceline.csv'
-wpt_path2: './Spielberg_centerline.csv'
+wpt_path: './racetracks/Spielberg/Spielberg_raceline.csv'
+wpt_path2: './racetracks/Spielberg/Spielberg_centerline.csv'
 wpt_delim: ';'
 wpt_rowskip: 3
 wpt_xind: 1

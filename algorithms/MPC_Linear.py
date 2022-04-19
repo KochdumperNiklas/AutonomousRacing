@@ -1,57 +1,21 @@
-import time
-import yaml
-import gym
 import numpy as np
-from argparse import Namespace
 import math
-from numba import njit
 import cvxpy
-import matplotlib.pyplot as plt
-import pickle
-import copy
 
-""" --------------------------------------------------------------------------------------------------------------------
-Controller
--------------------------------------------------------------------------------------------------------------------- """
-
-class MPC_Controller:
+class MPC_Linear:
     """class representing an MPC controller that tracks the optimal raceline"""
 
-    def __init__(self, path):
+    def __init__(self, racetrack, wheelbase, path):
         """object constructor"""
 
-        self.raceline = self.load_raceline(path)                        # load optimal raceline from file
-        self.controller_settings()                                      # load controller settings
+        # load optimal raceline and controller settings
+        self.raceline = self.load_raceline(path)
+        self.load_controller_settings(racetrack)
+        self.WB = wheelbase
 
-        # initialize previous control inputs and raceline index
+        # initialize previous control inputs and index of closest raceline point
         self.u_prev = np.zeros((2, self.N))
         self.ind_prev = 0
-
-    def controller_settings(self):
-        """settings for the MPC controller"""
-
-        # weighting matrices for MPC
-        self.R = np.diag([0.01, 100.0])                                 # input cost matrix[accel, steer]
-        self.Rd = np.diag([0.01, 100.0])                                # input difference cost matrix[accel, steer]
-        self.Q = np.diag([13.5, 13.5, 5.5, 13.0])                       # state cost matrix [x, y, v, yaw]
-        self.Qf = np.diag([13.5, 13.5, 5.5, 13.0])                      # final state cost matrix [x, y, v, yaw]
-
-        # motion planning parameter
-        self.DT = 0.10                                                  # time step size [s]
-        self.N = 10                                                     # number of time steps for MPC prediction
-        self.freq = 1/self.DT                                           # planning frequency [Hz]
-
-        # input and state constraints
-        self.MAX_STEER = np.deg2rad(24.0)                               # maximum steering angle [rad]
-        self.MAX_DSTEER = np.deg2rad(180.0)                             # maximum steering speed [rad/s]
-        self.MAX_SPEED = 6                                              # maximum speed [m/s]
-        self.MIN_SPEED = 0                                              # minimum backward speed [m/s]
-        self.MAX_ACCEL = 2.5                                            # maximum acceleration [m/s**2]
-
-        # Vehicle parameters
-        self.LENGTH = 0.58                                              # length of the vehicle [m]
-        self.WIDTH = 0.31                                               # width of the vehicle [m]
-        self.WB = 0.33                                                  # length of the wheelbase [m]
 
     def plan(self, x, y, theta, v):
         """plan a trajectory using MPC"""
@@ -198,12 +162,6 @@ class MPC_Controller:
 
         return A, B, C
 
-    def load_raceline(self, path):
-        """load the optimal raceline from the corresponding file"""
-
-        tmp = np.loadtxt(path, delimiter=';', skiprows=3)
-        return np.transpose(tmp[:, [1, 2, 5, 3]])
-
     def closest_raceline_point(self, x, v):
         """find the point on the raceline that is closest to the current state"""
 
@@ -219,54 +177,38 @@ class MPC_Controller:
 
         return ind_range[ind]
 
+    def load_raceline(self, path):
+        """load the optimal raceline from the corresponding file"""
 
-""" --------------------------------------------------------------------------------------------------------------------
-Main Program
--------------------------------------------------------------------------------------------------------------------- """
+        tmp = np.loadtxt(path, delimiter=';', skiprows=3)
+        return np.transpose(tmp[:, [1, 2, 5, 3]])
 
-if __name__ == '__main__':
+    def load_controller_settings(self, racetrack):
+        """load settings for the MPC controller"""
 
-    # load the configuration for the desired Racetrack
-    work = {'mass': 3.463388126201571, 'lf': 0.15597534362552312, 'tlad': 0.82461887897713965, 'vgain': 0.8125}
-    with open('config_Spielberg_map.yaml') as file:
-        conf_dict = yaml.load(file, Loader=yaml.FullLoader)
-    conf = Namespace(**conf_dict)
+        # load controller settings from file
+        path = 'racetracks/' + racetrack + '/settings_' + racetrack + '_MPC_Linear.txt'
 
-    # create the simulation environment and initialize it
-    env = gym.make('f110_gym:f110-v0', map=conf.map_path, map_ext=conf.map_ext, num_agents=1)
-    obs, step_reward, done, info = env.reset(np.array([[conf.sx, conf.sy, conf.stheta]]))
-    env.render()
+        with open(path) as f:
+            lines = f.readlines()
 
-    # initialize the motion planner
-    controller = MPC_Controller(conf.wpt_path)
+        for l in lines:
+            exec(l, globals(), globals())
 
-    # initialize auxiliary variables
-    laptime = 0.0
-    control_lim = np.ceil(1 / (controller.freq * env.timestep)).astype(int)
-    control_count = control_lim
-    start = time.time()
+        # weighting matrices for MPC
+        self.R = R                                                      # input cost matrix[accel, steer]
+        self.Rd = Rd                                                    # input difference cost matrix[accel, steer]
+        self.Q = Q                                                      # state cost matrix [x, y, v, yaw]
+        self.Qf = Qf                                                    # final state cost matrix [x, y, v, yaw]
 
-    # main control loop
-    while not done:
+        # motion planning parameter
+        self.DT = DT                                                    # time step size [s]
+        self.N = N                                                      # number of time steps for MPC prediction
+        self.freq = freq                                                # planning frequency [Hz]
 
-        # re-plan trajectory
-        if control_count == control_lim:
-
-            speed, steer = controller.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0],
-                                           obs['linear_vels_x'][0])
-            control_count = 0
-
-        # update the simulation environment
-        obs, step_reward, done, info = env.step(np.array([[steer, speed]]))
-        laptime += step_reward
-
-        env.render(mode='human_fast')
-
-        # update counter
-        control_count = control_count + 1
-
-        if obs['lap_counts'] == 1:
-            break
-
-    # print results
-    print('Sim elapsed time:', laptime, 'Real elapsed time:', time.time() - start)
+        # input and state constraints
+        self.MAX_STEER = MAX_STEER                                      # maximum steering angle [rad]
+        self.MAX_DSTEER = MAX_DSTEER                                    # maximum steering speed [rad/s]
+        self.MAX_SPEED = MAX_SPEED                                      # maximum speed [m/s]
+        self.MIN_SPEED = MIN_SPEED                                      # minimum backward speed [m/s]
+        self.MAX_ACCEL = MAX_ACCEL                                      # maximum acceleration [m/s**2]

@@ -1,7 +1,7 @@
 # motion planning parameter
 DT = 0.5                                                   # time step size [s]
 N = 3                                                      # number of time steps for MPC prediction
-freq = 10                                           	   # planning frequency [Hz]
+freq = 5                                           	   # planning frequency [Hz]
 
 # motion primitives
 vel_init = [0, 3]							# initial velocities for motion primitives

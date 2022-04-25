@@ -18,10 +18,14 @@ Vehicle Model
 def simulate(x0, u, t, params):
     """simulate the car"""
 
-    sol = odeint(dynamic_function, x0, t, args=(u, params))
-    return sol
+    x = np.zeros((x0.shape[0], len(t)))
 
-def dynamic_function(x,t,u,params):
+    for i in range(len(t)-1):
+        x[:, i+1] = x[:, i] + dynamic_function(x[:, i], u, params) * (t[i+1] - t[i])
+
+    return np.transpose(x)
+
+def dynamic_function(x, u, params):
     """differential equation for the car-model"""
 
     # apply PID controller to determine acceleration and steering velocity from desired velocity and steering angle

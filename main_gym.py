@@ -7,12 +7,12 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
 CONTROLLER = 'ManeuverAutomaton'
-RACETRACK = 'Oschersleben'
+RACETRACK = 'Spielberg'
 
 if __name__ == '__main__':
 
     # load the configuration for the desired Racetrack
-    path = 'racetracks/' + RACETRACK + '/config_' + RACETRACK + '_map.yaml'
+    path = 'racetracks/' + RACETRACK + '/config_' + RACETRACK + '.yaml'
     with open(path) as file:
         conf_dict = yaml.load(file, Loader=yaml.FullLoader)
     conf = Namespace(**conf_dict)
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         obs, step_reward, done, info = env.step(np.array([[steer, speed]]))
         laptime += step_reward
 
-        env.render(mode='human_fast')
+        env.render(mode='human')
 
         # update counter and check if lap is finished
         control_count = control_count + 1

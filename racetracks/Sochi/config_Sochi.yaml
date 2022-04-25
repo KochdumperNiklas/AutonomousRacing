@@ -6,7 +6,7 @@ perf_num: 6
 
 # map paths
 #map_path: './Sochi_obstacles'
-map_path: './Sochi_map'
+map_path: './racetracks/Sochi/Sochi_map'
 map_ext: '.png'
 
 # Start\ Finish Line: -0.0440806; -0.8491629; 3.4034118;
@@ -24,7 +24,7 @@ stheta2: 4.1446321
 
 
 # raceline path and indices
-wpt_path: './Sochi_raceline.csv'
+wpt_path: './racetracks/Sochi/Sochi_raceline.csv'
 wpt_path2: './Sochi_centerline.csv'
 wpt_delim: ';'
 wpt_rowskip: 3

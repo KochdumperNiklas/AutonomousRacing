@@ -6,7 +6,7 @@ from argparse import Namespace
 from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
-CONTROLLER = 'ManeuverAutomaton'
+CONTROLLER = 'MPC_Linear'
 RACETRACK = 'Spielberg'
 
 if __name__ == '__main__':

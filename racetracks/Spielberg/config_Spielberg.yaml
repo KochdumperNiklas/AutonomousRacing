@@ -6,7 +6,7 @@ perf_num: 6
 
 # map paths
 #map_path: './Spielberg_map'
-map_path: './racetracks/Spielberg/Spielberg_map'
+map_path: './racetracks/Spielberg/Spielberg'
 map_ext: '.png'
 
 # Before Start\ Finish Line: 5.5572091; 0.6514429; 3.4033109

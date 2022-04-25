@@ -1,4 +1,4 @@
-map_path: './racetracks/Oschersleben/Oschersleben_map'
+map_path: './racetracks/Oschersleben/Oschersleben'
 map_ext: '.png'
 
 # Start Positition Single Vehicle Time Trial
@@ -16,3 +16,6 @@ stheta: 2.79787
 sx2: 0.9966514
 sy2: -0.9306893
 stheta2: 2.79787
+
+# raceline path and indices
+wpt_path: './racetracks/Oschersleben/Oschersleben_raceline.csv'

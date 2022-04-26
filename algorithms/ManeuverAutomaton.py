@@ -12,6 +12,8 @@ from copy import deepcopy
 from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.Polytope import Polytope
 from auxiliary.vehicle_model import simulate
+from auxiliary.raceline import load_raceline
+from auxiliary.raceline import get_reference_trajectory
 
 
 """ --------------------------------------------------------------------------------------------------------------------
@@ -158,11 +160,16 @@ Motion Planner
 class ManeuverAutomaton:
     """class representing a maneuver automaton motion planner"""
 
-    def __init__(self, racetrack, params):
+    def __init__(self, racetrack, params, path):
         """class constructor"""
 
         # load controller settings
         self.load_controller_settings(racetrack)
+
+        # load optimal raceline
+        if self.RACELINE:
+            self.raceline = load_raceline(path)
+            self.ind_prev = 0
 
         # store car parameter (mass, width ,length, etc.)
         self.params = params
@@ -249,12 +256,35 @@ class ManeuverAutomaton:
         self.N_STEPS = N_STEPS                              # number of time steps for one motion primitive
         self.UNITE = UNITE                                  # number of time steps that are united for occupancy set
         self.LIDAR_STEP = LIDAR_STEP                        # number of lidar points that are skipped
+        self.RACELINE = RACELINE                            # track the optimal raceline
+
+    def cost_function(self, x, ref_traj, ind, x0, lidar_data):
+        """cost function"""
+
+        if self.RACELINE:
+            x_ = transform_state(x, x0)
+            cost = -np.sum((ref_traj[:, ind + 1] - x_[[0, 1, 3, 4]])**2)
+        else:
+            tmp = (lidar_data - np.dot(np.resize(x[0:2], (2, 1)), np.ones((1, lidar_data.shape[1])))) ** 2
+            cost = -min(np.sum(tmp, 0))
+
+        return cost
 
     def plan(self, x, y, theta, v, scans):
         """plan a trajectory"""
 
+        x0 = np.array([x, y, 0, v, theta, 0, 0])
+
         # transform lidar data into point cloud
         points = process_lidar_data(scans)
+
+        # get reference trajectory
+        ref_traj = None
+
+        if self.RACELINE:
+            v_ = max(v, 0.1)
+            ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v_, self.N, self.DT, self.ind_prev)
+            self.ind_prev = ind
 
         # initialize queue
         queue = []
@@ -263,8 +293,7 @@ class ManeuverAutomaton:
         for i in self.indices[ind]:
             mp = self.motion_primitives[i]
             if not mp.occupancy_set.intersects(points):
-                # cost = -np.sqrt(mp.xEnd[0]**2 + mp.xEnd[1]**2)
-                cost = -min(np.sum((points - np.dot(np.resize(mp.xEnd[0:2], (2, 1)), np.ones((1, 1080)))) ** 2, 0))
+                cost = self.cost_function(mp.xEnd, ref_traj, 0, x0, points)
                 queue.append(Node(mp.xEnd, [i], cost))
 
         # loop until the queue is empty
@@ -304,8 +333,7 @@ class ManeuverAutomaton:
 
                         mp = deepcopy(self.motion_primitives[i])
                         x_ = deepcopy(transform_state(mp.xEnd, deepcopy(node.x)))
-                        cost_ = -min(np.sum((points - np.dot(np.resize(x_[0:2], (2, 1)), np.ones((1, 1080)))) ** 2, 0))
-                        # cost_ = -np.sqrt(x_[0]**2 + x_[1]**2)
+                        cost_ = node.cost + self.cost_function(x_, ref_traj, len(node.ind), x0, points)
                         ind_ = deepcopy(node.ind)
                         ind_.append(i)
                         queue.append(Node(x_, ind_, cost_))

@@ -1,12 +1,12 @@
 # motion planning parameter
-DT = 0.4                                                   # time step size [s]
+DT = 0.5                                                   # time step size [s]
 N = 3                                                      # number of time steps for MPC prediction
-freq = 10                                           	   # planning frequency [Hz]
+freq = 5                                           	   # planning frequency [Hz]
 
 # motion primitives
-vel_init = [0, 5]							# initial velocities for motion primitives
+vel_init = [0, 3]							# initial velocities for motion primitives
 steer = [-0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15, 0.2]		# steering inputs for motion primitives
-vel = [-5, 0, 5]							# velocity inputs for motion primitives
+vel = [-3, 0, 3]							# velocity inputs for motion primitives
 
 # additional settings
 N_STEPS = 50						# number of time steps for one motion primitive

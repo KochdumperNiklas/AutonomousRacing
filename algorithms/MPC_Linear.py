@@ -1,6 +1,10 @@
 import numpy as np
 import math
 import cvxpy
+import matplotlib.pyplot as plt
+import largestinteriorrectangle as lir
+from auxiliary.process_lidar_data import process_lidar_data
+from auxiliary.Polytope import Polytope
 
 class MPC_Linear:
     """class representing an MPC controller that tracks the optimal raceline"""
@@ -12,8 +16,9 @@ class MPC_Linear:
         self.raceline = self.load_raceline(path)
         self.load_controller_settings(racetrack)
 
-        # wheelbase of the car
+        # wheelbase and width of the car
         self.WB = params['lf'] + params['lr']
+        self.width = params['width']
 
         # initialize previous control inputs and index of closest raceline point
         self.u_prev = np.zeros((2, self.N))
@@ -30,13 +35,17 @@ class MPC_Linear:
         # predict expected trajectory based on the previous control inputs (for linearization points)
         pred_traj = self.get_predicted_trajectory(x, y, theta, v)
 
+        # compute drivable area
+        lidar_data = process_lidar_data(scans)
+        drive_area = self.drivable_area(x, y, v, theta, lidar_data)
+
         # plan new trajectory using MPC
         x0 = np.array([x, y, v, theta])
-        self.u_prev = self.mpc_optimization(x0, ref_traj, pred_traj)
+        self.u_prev = self.mpc_optimization(x0, ref_traj, pred_traj, drive_area)
 
         return v + self.u_prev[0, 0] * self.DT, self.u_prev[1, 0]
 
-    def mpc_optimization(self, x0, ref_traj, pred_traj):
+    def mpc_optimization(self, x0, ref_traj, pred_traj, drive_area):
         """solve optimal control problem for MPC"""
 
         # initialization
@@ -55,6 +64,8 @@ class MPC_Linear:
 
             A, B, C = self.linearized_dynamic_function(pred_traj[2, i], pred_traj[3, i], 0)
             constraints += [x[:, i + 1] == A @ x[:, i] + B @ u[:, i] + C]
+
+            constraints += [drive_area[i].c @ x[0:2, i + 1] <= np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))]
 
             if i < (self.N - 1):
                 objective += cvxpy.quad_form(u[:, i + 1] - u[:, i], self.Rd)
@@ -125,6 +136,86 @@ class MPC_Linear:
             pred_traj[2, i+1] = np.max((np.min((pred_traj[2, i+1], self.MAX_SPEED)), self.MIN_SPEED))
 
         return pred_traj
+
+    def drivable_area(self, x, y, v, theta, lidar_data):
+        """compute the drivable area"""
+
+        N = 20
+        drive_area = []
+
+        # initialize drivable area
+        x_min = 0
+        x_max = 0
+        y_min = -self.width
+        y_max = self.width
+        v_min = v
+        v_max = v
+
+        # loop over all time steps
+        for i in range(1, self.N+1):
+
+            # propagate drivable area forward in time
+            x_max = x_max + v_max*self.DT + 0.5*self.MAX_ACCEL*(self.DT**2)
+            x_min = x_min + v_min*self.DT - 0.5*self.MAX_ACCEL*(self.DT**2)
+            y_max = y_max + v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
+            y_min = y_min - v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
+            v_max = v_max + self.MAX_ACCEL*self.DT
+            v_min = v_min - self.MAX_ACCEL*self.DT
+
+            C = np.concatenate((np.eye(2), -np.eye(2)), axis=0)
+            d = np.array([[x_max], [y_max], [-x_min], [-y_min]])
+            poly = Polytope(C, d)
+
+            # determine points that are inside the drivable area
+            tmp = np.max(np.dot(poly.c, lidar_data) - np.dot(poly.d, np.ones((1, lidar_data.shape[1]))), axis=0)
+            ind = [i for i in range(len(tmp)) if tmp[i] < 0]
+
+            # intersect with the obstacles
+            grid = np.ones((N, N))
+
+            dx = (x_max - x_min)/N
+            dy = (y_max - y_min)/N
+            c_x = (x_max + x_min)/2
+            c_y = (y_max + y_min)/2
+
+            for j in ind:
+                ind1 = np.floor((lidar_data[0, j] - c_x)/dx + N/2).astype(int)
+                ind2 = np.floor((lidar_data[1, j] - c_y)/dy + N/2).astype(int)
+                grid[min(ind2, N-1), min(ind1, N-1)] = 0
+
+            rect = lir.lir(grid.astype(bool))
+
+            x_min = c_x + (rect[0] - N/2)*dx
+            x_max = c_x + (rect[0] + rect[2] - N/2)*dx
+            y_min = c_y + (rect[1] - N/2)*dy
+            y_max = c_y + (rect[1] + rect[3] - N/2)*dy
+
+            poly_ = Polytope(poly.c, np.array([[x_max], [y_max-1.2*self.width/2], [-x_min], [-y_min-1.2*self.width/2]]))
+
+            """# Debug
+            poly.plot('r')
+            poly_.plot('k')
+            plt.plot(lidar_data[0, :], lidar_data[1, :], '.b')
+            plt.plot(lidar_data[0, ind], lidar_data[1, ind], '.g')
+            plt.show()"""
+
+            # transform from local to global coordinate frame
+            area = poly_
+            area.rotate(theta)
+            area.shift(np.array([[x], [y]]))
+
+            drive_area.append(area)
+
+        """colors = ['r', 'b', 'g', 'k', 'y', 'r', 'b', 'g', 'k', 'y']
+
+        for i in range(len(drive_area)):
+            drive_area[i].plot(colors[i])
+
+        plt.plot(x, y, '.k')
+        plt.show()"""
+
+        return drive_area
+
 
     def dynamic_function(self, x, u):
         """differential equation for the kinematic single track model"""

@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import largestinteriorrectangle as lir
 from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.Polytope import Polytope
+from auxiliary.raceline import load_raceline
+from auxiliary.raceline import get_reference_trajectory
 
 class MPC_Linear:
     """class representing an MPC controller that tracks the optimal raceline"""
@@ -13,7 +15,7 @@ class MPC_Linear:
         """object constructor"""
 
         # load optimal raceline and controller settings
-        self.raceline = self.load_raceline(path)
+        self.raceline = load_raceline(path)
         self.load_controller_settings(racetrack)
 
         # wheelbase and width of the car
@@ -30,7 +32,8 @@ class MPC_Linear:
         v = np.max((v, 0.1))
 
         # get reference trajectory
-        ref_traj = self.get_reference_trajectory(x, y, theta, v)
+        ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v, self.N, self.DT, self.ind_prev)
+        self.ind_prev = ind
 
         # predict expected trajectory based on the previous control inputs (for linearization points)
         pred_traj = self.get_predicted_trajectory(x, y, theta, v)
@@ -65,7 +68,7 @@ class MPC_Linear:
             A, B, C = self.linearized_dynamic_function(pred_traj[2, i], pred_traj[3, i], 0)
             constraints += [x[:, i + 1] == A @ x[:, i] + B @ u[:, i] + C]
 
-            constraints += [drive_area[i].c @ x[0:2, i + 1] <= np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))]
+            #constraints += [drive_area[i].c @ x[0:2, i + 1] <= np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))]
 
             if i < (self.N - 1):
                 objective += cvxpy.quad_form(u[:, i + 1] - u[:, i], self.Rd)
@@ -91,36 +94,6 @@ class MPC_Linear:
             u = None
 
         return u
-
-    def get_reference_trajectory(self, x, y, theta, v):
-        """extract the reference trajectory piece for the current state"""
-
-        # initialization
-        ref_traj = np.zeros((4, self.N+1))
-        dist_delta = np.sqrt(np.sum((self.raceline[[0, 1], 1] - self.raceline[[0, 1], 0])**2, axis=0))
-        dist = 0
-
-        # get closest raceline point for the current state
-        ind = self.closest_raceline_point(np.array([[x], [y]]), v)
-
-        # loop over all reference trajectory points
-        for i in range(self.N + 1):
-
-            # travelled distance based on current velocity
-            dist += abs(v) * self.DT
-            ind_delta = int(round(dist / dist_delta))
-            ind_new = np.mod(ind + ind_delta, self.raceline.shape[1])
-
-            # store reference trajectory point
-            ref_traj[:, i] = self.raceline[:, ind_new]
-
-            # consider heading change from 2pi -> 0 and 0 -> 2pi to guarantee that all headings are the same
-            if self.raceline[3, ind_new] - theta > 5:
-                ref_traj[3, i] = abs(self.raceline[3, ind_new] - 2 * math.pi)
-            elif self.raceline[3, ind_new] - theta < -5:
-                ref_traj[3, i] = abs(self.raceline[3, ind_new] + 2 * math.pi)
-
-        return ref_traj
 
     def get_predicted_trajectory(self, x, y, theta, v):
         """predict trajectory based on the previous control inputs"""
@@ -254,27 +227,6 @@ class MPC_Linear:
         C[3] = - self.DT * v * steer / (self.WB * math.cos(steer) ** 2)
 
         return A, B, C
-
-    def closest_raceline_point(self, x, v):
-        """find the point on the raceline that is closest to the current state"""
-
-        # determine search range
-        dist_delta = np.sqrt(np.sum((self.raceline[[0, 1], 1] - self.raceline[[0, 1], 0]) ** 2, axis=0))
-        ind_diff = np.ceil(v*self.DT/dist_delta) + 10
-
-        ind_range = np.mod(np.arange(self.ind_prev, self.ind_prev + ind_diff), self.raceline.shape[1]).astype(int)
-
-        # compute closest point
-        ind = np.argmin(np.sum((self.raceline[0:2, ind_range]-x)**2, axis=0))
-        self.ind_prev = ind_range[ind]
-
-        return ind_range[ind]
-
-    def load_raceline(self, path):
-        """load the optimal raceline from the corresponding file"""
-
-        tmp = np.loadtxt(path, delimiter=';', skiprows=3)
-        return np.transpose(tmp[:, [1, 2, 5, 3]])
 
     def load_controller_settings(self, racetrack):
         """load settings for the MPC controller"""

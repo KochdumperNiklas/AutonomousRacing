@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import ConvexHull
+from copy import deepcopy
 import pypoman
 
 class Polytope:
@@ -11,6 +12,18 @@ class Polytope:
 
         self.c = c                          # matrix C for the inequality constraint C*x <= d
         self.d = d                          # constant offset for the inequality constraint C*x <= d
+
+    def __sub__(self, set):
+    # Minkowski difference of the polytope with another set
+
+        d = deepcopy(self.d)
+
+        # loop over all halfspaces
+        for i in range(self.c.shape[0]):
+            tmp = set.support_func(-self.c[i, :])
+            d[i] = d[i] - tmp
+
+        return Polytope(self.c, d)
 
     def intersects(self, p):
     # check if the polytope intersects a point cloud p

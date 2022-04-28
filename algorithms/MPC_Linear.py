@@ -3,6 +3,7 @@ import math
 import cvxpy
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from scipy.io import savemat
 import largestinteriorrectangle as lir
 from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.Polytope import Polytope
@@ -35,6 +36,8 @@ class MPC_Linear:
 
         v = np.max((v, 0.1))
 
+        print(v)
+
         # get reference trajectory
         ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v, self.N, self.DT, self.ind_prev)
         self.ind_prev = ind
@@ -51,15 +54,17 @@ class MPC_Linear:
         self.u_prev = self.mpc_optimization(x0, ref_traj, pred_traj, drive_area)
 
         if self.u_prev is None:
-            for p in drive_area:
-                p.plot('b')
+
+            colors = ['r', 'b', 'g', 'r', 'b', 'g', 'r', 'b', 'g', 'r']
+
+            for i in range(len(drive_area)):
+                drive_area[i].plot(colors[i])
 
             p = np.dot(np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]),
                        lidar_data) + np.array([[x], [y]])
             plt.plot(p[0, :], p[1, :], '.r')
             plt.plot(x, y, '.k')
             plt.show()
-            test = 1
 
         return v + self.u_prev[0, 0] * self.DT, self.u_prev[1, 0]
 
@@ -83,7 +88,11 @@ class MPC_Linear:
             A, B, C = self.linearized_dynamic_function(pred_traj[2, i], pred_traj[3, i], 0)
             constraints += [x[:, i + 1] == A @ x[:, i] + B @ u[:, i] + C]
 
-            constraints += [drive_area[i].c @ x[0:2, i + 1] <= np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))]
+            d = np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))
+            s = cvxpy.Variable((len(d), ))
+            constraints += [drive_area[i].c @ x[0:2, i + 1] <= d + s]
+            constraints += [np.zeros((len(d), )) <= s]
+            objective += cvxpy.quad_form(s, 200*np.identity(len(d)))
 
             if i < (self.N - 1):
                 objective += cvxpy.quad_form(u[:, i + 1] - u[:, i], self.Rd)
@@ -100,7 +109,7 @@ class MPC_Linear:
 
         # solve the optimal control problem
         prob = cvxpy.Problem(cvxpy.Minimize(objective), constraints)
-        prob.solve(solver=cvxpy.OSQP, verbose=False, warm_start=True)
+        prob.solve(solver=cvxpy.GUROBI, verbose=False, warm_start=True)
 
         if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
             u = u.value
@@ -129,18 +138,19 @@ class MPC_Linear:
         """compute the drivable area"""
 
         # convert lidar data to polygon of safe states
+        lidar_data = lidar_data + np.array([[self.WB], [0]])
         pgon_safe = free_space(lidar_data)
 
         # initialize drivable area
-        x_min = -self.length/2
-        x_max = self.length/2
+        x_min = -self.length/2 + self.WB/2
+        x_max = self.length/2 + self.WB/2
         y_min = -self.width
         y_max = self.width
         v_min = v
         v_max = v
 
-        car = Polygon(np.array([-self.length/4, -self.length/4, self.length/4, self.length/4]),
-                      np.array([-self.width/2, self.width/2, self.width/2, -self.width/2]))
+        car = Polygon(np.array([x_min, x_min, x_max, x_max]),
+                      np.array([-self.width/1, self.width/1, self.width/1, -self.width/1]))
         drive_area = []
 
         # loop over all time steps
@@ -149,26 +159,24 @@ class MPC_Linear:
             # propagate drivable area forward in time
             x_max = x_max + v_max*self.DT + 0.5*self.MAX_ACCEL*(self.DT**2)
             x_min = x_min + v_min*self.DT - 0.5*self.MAX_ACCEL*(self.DT**2)
-            y_max = y_max + v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
-            y_min = y_min - v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
             v_max = v_max + self.MAX_ACCEL*self.DT
             v_min = v_min - self.MAX_ACCEL*self.DT
+            y_max = y_max + v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
+            y_min = y_min - v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
 
             pgon = Polygon(np.array([x_min, x_min, x_max, x_max]), np.array([y_min, y_max, y_max, y_min]))
 
             # compute intersection with set of safe states
-            pgon_tmp = pgon & pgon_safe
-
-            print(pgon_tmp.set.vertices)
-
-            v = np.array([[1.39738069, 0.8082182],
-                          [2.88387841, 0.47403599],
-                          [4.00238069, 0.64136782],
-                          [4.00238069, -1.11533437],
-                          [1.39738069, -1.11533437]])
-
-            pgon = Polygon(v[:, 0], v[:, 1])
-            test = pgon.largest_convex_subset()
+            try:
+                pgon_tmp = pgon & pgon_safe
+            except:
+                for p in drive_area:
+                    try:
+                        p.plot('r')
+                    except:
+                        est = 1
+                pgon_safe.plot('b')
+                test = 1
 
             # determine largest convex subset of the set
             pgon_drive = pgon_tmp.largest_convex_subset()

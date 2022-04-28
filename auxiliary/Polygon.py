@@ -1,8 +1,9 @@
 import numpy as np
-import matplotlib.path as mpltPath
+import math
 from shapely import geometry
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from scipy.io import loadmat
 from auxiliary.Polytope import Polytope
 
 class Polygon:
@@ -13,22 +14,35 @@ class Polygon:
 
         x = np.resize(x, (len(x), 1))
         y = np.resize(y, (len(y), 1))
-        tmp = np.concatenate((x, y), axis=1)
-
-        self.set = mpltPath.Path(tmp.tolist())
+        self.vertices = np.concatenate((x, y), axis=1)
 
     def __and__(self, set):
         """intersection of two polygons"""
 
         # compute intersection
-        pgon1 = geometry.Polygon([*zip(self.set.vertices[:, 0], self.set.vertices[:, 1])])
-        pgon2 = geometry.Polygon([*zip(set.set.vertices[:, 0], set.set.vertices[:, 1])])
+        pgon1 = geometry.Polygon([*zip(self.vertices[:, 0], self.vertices[:, 1])])
+        pgon2 = geometry.Polygon([*zip(set.vertices[:, 0], set.vertices[:, 1])])
+
+        if not pgon1.is_valid:
+            pgon1 = pgon1.buffer(0)
+
+        if not pgon2.is_valid:
+            pgon2 = pgon2.buffer(0)
 
         pgon = pgon1.intersection(pgon2)
 
-        x, y = pgon.exterior.coords.xy
+        # select largest region if there are multiple disjoint regions
+        if isinstance(pgon, geometry.MultiPolygon):
+            area = -math.inf
+            for i in range(len(pgon)):
+                if pgon[i].area > area:
+                    tmp = pgon[i]
+
+            pgon = tmp
 
         # remove redundant vertices
+        x, y = pgon.exterior.coords.xy
+
         if x[0] == x[len(x)-1] and y[0] == y[len(y)-1]:
             x = x[:-1]
             y = y[:-1]
@@ -38,30 +52,30 @@ class Polygon:
     def support_func(self, dir):
         """evaluate the support function of the polygon in the given direction"""
 
-        v = np.transpose(self.set.vertices)
+        v = np.transpose(self.vertices)
         return np.max(np.dot(dir, v))
 
     def plot(self, color):
         """plot the polygon"""
 
-        v = self.set.vertices
+        v = self.vertices
         v = np.concatenate((v, v[[0], :]), axis=0)
         plt.plot(v[:, 0], v[:, 1], color)
 
     def interval(self):
         """enclose the polygon by an interval"""
 
-        x_min = np.min(self.set.vertices[:, 0])
-        x_max = np.max(self.set.vertices[:, 0])
-        y_min = np.min(self.set.vertices[:, 1])
-        y_max = np.max(self.set.vertices[:, 1])
+        x_min = np.min(self.vertices[:, 0])
+        x_max = np.max(self.vertices[:, 0])
+        y_min = np.min(self.vertices[:, 1])
+        y_max = np.max(self.vertices[:, 1])
 
         return x_min, x_max, y_min, y_max
 
     def polytope(self):
         """convert the (convex) polygon to a polytope"""
 
-        v = self.set.vertices
+        v = self.vertices
         v = np.concatenate((v, v[[0], :]), axis=0)
         v = np.transpose(v)
 
@@ -85,18 +99,35 @@ class Polygon:
     def area(self):
         """compute the area of the polygon"""
 
-        pgon = geometry.Polygon([*zip(self.set.vertices[:, 0], self.set.vertices[:, 1])])
+        pgon = geometry.Polygon([*zip(self.vertices[:, 0], self.vertices[:, 1])])
         return pgon.area
+
+    def is_valid(self):
+        """check if the polygon is valid"""
+
+        pgon = geometry.Polygon([*zip(self.vertices[:, 0], self.vertices[:, 1])])
+        return pgon.is_valid
+
+    def simplify(self):
+
+        pgon = geometry.Polygon([*zip(self.vertices[:, 0], self.vertices[:, 1])])
+        d = 0.00001  # distance
+        cf = 1.3  # cofactor
+        pgon = pgon.buffer(-d).buffer(d * cf).intersection(pgon).simplify(d)
+        x, y = pgon.exterior.coords.xy
+
+        return Polygon(x, y)
 
     def largest_convex_subset(self):
         """compute the largest convex subset of the polygon"""
 
-        poly = deepcopy(self)
+        v = np.around(self.vertices, decimals=8)
+        poly = Polygon(v[:, 0], v[:, 1])
 
         while True:
 
             # determine all non-convex line segments
-            v = poly.set.vertices
+            v = poly.vertices
             v = np.concatenate((v, v[0:2, :]), axis=0)
             v = v.transpose()
 
@@ -108,7 +139,7 @@ class Polygon:
                 d1 = v[:, i + 1] - v[:, i]
                 d2 = v[:, i + 2] - v[:, i + 1]
 
-                if d1[1] * d2[0] - d1[0] * d2[1] < 0:
+                if d1[1] * d2[0] - d1[0] * d2[1] < -10**-5:
                     convex = False
                     ind.append(i+1)
                 elif convex is False:
@@ -127,26 +158,26 @@ class Polygon:
                 d = np.dot(c, v[:, i])
                 poly_ = poly.intersection_halfspace(c, d)
                 area_ = poly_.area()
-                if area_ > area:
+                if poly_.is_valid() and area_ > area:
                     P = poly_
                     area = area_
                 poly_ = poly.intersection_halfspace(-c, -d)
                 area_ = poly_.area()
-                if area_ > area:
+                if poly_.is_valid() and area_ > area:
                     P = poly_
                     area = area_
 
-            poly = deepcopy(P)
+            poly = deepcopy(P.simplify())
 
         return poly
 
     def intersection_halfspace(self, c, d):
         """intersect the polygon with a halfspace {x | c*x <= d}"""
 
-        v = self.set.vertices
+        v = self.vertices
         v = np.concatenate((v, v[[0], :]), axis=0)
         v = np.transpose(v)
-        tmp = np.dot(c, v) - d < 0
+        tmp = np.dot(c, v) - d < 10**-5
         tmp = tmp[0]
 
         v_ = []
@@ -167,11 +198,20 @@ class Polygon:
 
 if __name__ == '__main__':
 
-    v = np.array([[1.39738069, 0.8082182 ],
-                  [2.88387841, 0.47403599],
-                  [4.00238069, 0.64136782],
-                  [4.00238069, -1.11533437],
-                  [1.39738069, -1.11533437]])
+    """test = loadmat('debut.mat')
+
+    v = test['v']
+    pgon_tmp = Polygon(v[:, 0], v[:, 1])
+    test = pgon_tmp.largest_convex_subset()"""
+
+    v = np.array([[3.71004472,  0.60536893],
+                  [5.77968435,  0.67320848],
+                  [5.77968435,  0.36776389],
+                  [4.57615747,  0.24738788],
+                  [4.74541561, -0.31059272],
+                  [5.77968435, -0.3845218],
+                  [5.77968435, -1.37895175],
+                  [3.71004472, -1.37895175]])
 
     pgon = Polygon(v[:, 0], v[:, 1])
     test = pgon.largest_convex_subset()

@@ -20,7 +20,7 @@ class Polytope:
 
         # loop over all halfspaces
         for i in range(self.c.shape[0]):
-            tmp = set.support_func(-self.c[i, :])
+            tmp = set.support_func(self.c[i, :])
             d[i] = d[i] - tmp
 
         return Polytope(self.c, d)

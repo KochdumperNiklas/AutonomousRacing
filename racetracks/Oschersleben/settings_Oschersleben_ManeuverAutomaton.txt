@@ -4,12 +4,12 @@ N = 3                                                      # number of time step
 freq = 10                                           	   # planning frequency [Hz]
 
 # motion primitives
-vel_init = [0, 3, 6, 9]							# initial velocities for motion primitives
+vel_init = [0, 3, 6]							# initial velocities for motion primitives
 steer = [-0.2, -0.15, -0.1, -0.75, -0.05, -0.025, 0, 0.025, 0.05, 0.75, 0.1, 0.15, 0.2]		# steering inputs for motion primitives
 vel = [-3, 0, 3]								# velocity inputs for motion primitives
 
 # tuning parameters
-Q = np.diag([1, 1, 10, 0.1])							
+Q = np.diag([1, 1, 5, 0.5])							
 scale_length = 1.5
 scale_width = 1.5
 

@@ -13,7 +13,7 @@ from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.Polytope import Polytope
 from auxiliary.vehicle_model import simulate
 from auxiliary.raceline import load_raceline
-from auxiliary.raceline import get_reference_trajectory
+from auxiliary.raceline import get_ref_traj_piece
 
 
 """ --------------------------------------------------------------------------------------------------------------------
@@ -274,8 +274,8 @@ class ManeuverAutomaton:
 
         # tuning parameter
         self.Q = Q                                          # weighting matrix for the cost function
-        self.scale_length = 1.5                             # increase of the vehicle length for collision checking
-        self.scale_width = 1.5                              # increase of the vehicle width for collision checking
+        self.scale_length = scale_length                    # increase of the vehicle length for collision checking
+        self.scale_width = scale_width                      # increase of the vehicle width for collision checking
 
         # additional settings
         self.N_STEPS = N_STEPS                              # number of time steps for one motion primitive
@@ -304,8 +304,9 @@ class ManeuverAutomaton:
         """cost function"""
 
         if self.RACELINE:
-            tmp = ref_traj[:, ind] - x[[0, 1, 3, 4]]
-            cost = np.dot(np.transpose(tmp), np.dot(self.Q, tmp))
+            tmp = ref_traj - np.resize(x[[0, 1, 3, 4]], (4, 1))
+            ind = np.argmin(np.sum(tmp[0:2, :]**2, axis=0))
+            cost = np.dot(np.transpose(tmp[:, ind]), np.dot(self.Q, tmp[:, ind]))
         else:
             tmp = (lidar_data - np.dot(np.resize(x[0:2], (2, 1)), np.ones((1, lidar_data.shape[1])))) ** 2
             cost = -min(np.sum(tmp, 0))
@@ -326,7 +327,7 @@ class ManeuverAutomaton:
 
         if self.RACELINE:
             v_ = max(v, 0.1)
-            ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v_, self.N-1, self.DT, self.ind_prev)
+            ref_traj, ind = get_ref_traj_piece(self.raceline, x, y, theta, v_, self.N-1, self.DT, self.ind_prev)
             rot_mat = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
             ref_traj[0:2, :] = ref_traj[0:2] - np.array([[x], [y]])
             ref_traj[0:2, :] = np.dot(rot_mat, ref_traj[0:2, :])

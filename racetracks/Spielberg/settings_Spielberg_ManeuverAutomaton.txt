@@ -18,5 +18,5 @@ N_STEPS = 100						# number of time steps for one motion primitive
 UNITE = 10						# number of time steps that are united for occupancy set
 LIDAR_STEP = 2						# number of lidar points that are skipped
 RACELINE = True
-VISUALIZE = False
+VISUALIZE = True
 

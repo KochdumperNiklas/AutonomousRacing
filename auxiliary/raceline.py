@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from copy import deepcopy
 
 def get_reference_trajectory(raceline, x, y, theta, v, N, dt, ind_prev):
     """extract the reference trajectory piece for the current state"""
@@ -28,6 +29,28 @@ def get_reference_trajectory(raceline, x, y, theta, v, N, dt, ind_prev):
             ref_traj[3, i] = abs(raceline[3, ind_new] - 2 * math.pi)
         elif raceline[3, ind_new] - theta < -5:
             ref_traj[3, i] = abs(raceline[3, ind_new] + 2 * math.pi)
+
+    return ref_traj, ind
+
+def get_ref_traj_piece(raceline, x, y, theta, v, N, dt, ind_prev):
+    """extract the relevent piece of the reference trajectory"""
+
+    # initialization
+    dist_delta = np.sqrt(np.sum((raceline[[0, 1], 1] - raceline[[0, 1], 0]) ** 2, axis=0))
+    ind_delta = int(round(N * dt * abs(v) / dist_delta))
+
+    # get closest raceline point for the current state
+    ind = closest_raceline_point(raceline, np.array([[x], [y]]), v, dt, ind_prev)
+
+    # extract relevant reference trajectory piece
+    ref_traj = deepcopy(raceline[:, ind:ind + ind_delta])
+
+    # consider heading change from 2pi -> 0 and 0 -> 2pi to guarantee that all headings are the same
+    for i in range(ref_traj.shape[1]):
+        if ref_traj[3, i] - theta > 5:
+            ref_traj[3, i] = abs(ref_traj[3, i] - 2 * math.pi)
+        elif ref_traj[3, i] - theta < -5:
+            ref_traj[3, i] = abs(ref_traj[3, i] + 2 * math.pi)
 
     return ref_traj, ind
 

@@ -62,11 +62,11 @@ Auxiliary Classes
 class MotionPrimitive:
 # class representing a single motion primitive
 
-    def __init__(self, x, u, length, width,  unite):
+    def __init__(self, x, u, length, width, wb, unite):
     # class constructor
 
         # compute occupancy set
-        occ_set = self.construct_occupancy_set(x, u, length, width,  unite)
+        occ_set = self.construct_occupancy_set(x, u, length, width, wb, unite)
 
         # object properties
         self.x = x                              # trajectory of the cars reference point
@@ -75,12 +75,14 @@ class MotionPrimitive:
         self.xEnd = x[x.shape[0]-1, :]          # final state of the trajectory
         self.occupancy_set = occ_set            # occupancy set (space occupied by the car)
 
-
-    def construct_occupancy_set(self, x, u, length, width, unite):
+    def construct_occupancy_set(self, x, u, length, width, wb, unite):
     # compute the space occupied by the car (represented as a union of polytopes)
 
         # vertices of the car
-        vert = np.array([[length, length, -length, -length], [width, -width, -width, width]])
+        x_min = -length / 1.5
+        x_max = length / 1.5
+
+        vert = np.array([[x_max, x_max, x_min, x_min], [width / 1.5, -width / 1.5, -width / 1.5, width / 1.5]])
 
         # group trajectory points together into batches
         batches = np.arange(0, x.shape[0], unite)
@@ -144,6 +146,16 @@ class OccupancySet:
             poly.shift(p)
             self.polytopes[i] = poly
 
+    def plot(self, color):
+    # plot the occupancy set
+
+        for p in self.polytopes:
+            try:
+                p.plot(color)
+            except:
+                test = 1
+
+
 class Node:
 # class representing a node of the search tree
 
@@ -171,8 +183,14 @@ class ManeuverAutomaton:
             self.raceline = load_raceline(path)
             self.ind_prev = 0
 
-        # store car parameter (mass, width ,length, etc.)
+        # initial control input
+        self.u_prev = np.array([[0], [0]])
+
+        # wheelbase and width/length of the car
         self.params = params
+        self.WB = params['lf'] + params['lr']
+        self.width = params['width']
+        self.length = params['length']
 
         # construct motion primitives
         motion_primitives, conn_mat, indices = self.construct_automaton()
@@ -215,7 +233,7 @@ class ManeuverAutomaton:
                     x = simulate(x0, u, t, self.params)
 
                     # construct the motion primitive
-                    list_MP.append(MotionPrimitive(x, u, self.params['length'], self.params['width'], self.UNITE))
+                    list_MP.append(MotionPrimitive(x, u, self.length, self.width, self.WB, self.UNITE))
                     ind.append(cnt)
                     cnt = cnt + 1
 
@@ -251,6 +269,7 @@ class ManeuverAutomaton:
         self.vel_init = vel_init                            # initial velocities for motion primitives
         self.steer = steer                                  # steering inputs for motion primitives
         self.vel = vel                                      # velocity inputs for motion primitives
+        self.Q = Q
 
         # additional settings
         self.N_STEPS = N_STEPS                              # number of time steps for one motion primitive
@@ -258,12 +277,28 @@ class ManeuverAutomaton:
         self.LIDAR_STEP = LIDAR_STEP                        # number of lidar points that are skipped
         self.RACELINE = RACELINE                            # track the optimal raceline
 
+    def visualization(self, x, y, theta, ref_traj, lidar_data, best):
+        """visualize the planned trajectory"""
+
+        if best:
+            plt.cla()
+            rl = self.raceline[0:2, :] - np.array([[x], [y]])
+            rl = np.dot(np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]), rl)
+            plt.plot(lidar_data[0, :], lidar_data[1, :], '.r')
+            plot_trajectory(self.motion_primitives, best.ind, 'b')
+            plt.plot(rl[0, :], rl[1, :], 'g')
+            plt.plot(ref_traj[0, :], ref_traj[1, :], 'm')
+            plt.axis('equal')
+            plt.xlim([np.min(lidar_data[0, :])-2, np.max(lidar_data[0, :])+2])
+            plt.ylim([np.min(lidar_data[1, :])-2, np.max(lidar_data[1, :])+2])
+            plt.pause(0.1)
+
     def cost_function(self, x, ref_traj, ind, x0, lidar_data):
         """cost function"""
 
         if self.RACELINE:
-            x_ = transform_state(x, x0)
-            cost = -np.sum((ref_traj[:, ind + 1] - x_[[0, 1, 3, 4]])**2)
+            tmp = ref_traj[:, ind] - x[[0, 1, 3, 4]]
+            cost = np.dot(np.transpose(tmp), np.dot(self.Q, tmp))
         else:
             tmp = (lidar_data - np.dot(np.resize(x[0:2], (2, 1)), np.ones((1, lidar_data.shape[1])))) ** 2
             cost = -min(np.sum(tmp, 0))
@@ -273,6 +308,7 @@ class ManeuverAutomaton:
     def plan(self, x, y, theta, v, scans):
         """plan a trajectory"""
 
+        print('velocity: ', v)
         x0 = np.array([x, y, 0, v, theta, 0, 0])
 
         # transform lidar data into point cloud
@@ -283,7 +319,11 @@ class ManeuverAutomaton:
 
         if self.RACELINE:
             v_ = max(v, 0.1)
-            ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v_, self.N, self.DT, self.ind_prev)
+            ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v_, self.N-1, self.DT, self.ind_prev)
+            rot_mat = np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]])
+            ref_traj[0:2, :] = ref_traj[0:2] - np.array([[x], [y]])
+            ref_traj[0:2, :] = np.dot(rot_mat, ref_traj[0:2, :])
+            ref_traj[3, :] = ref_traj[3, :] - theta
             self.ind_prev = ind
 
         # initialize queue
@@ -312,8 +352,7 @@ class ManeuverAutomaton:
 
                 if node.cost < cost:
                     best = deepcopy(node)
-                    cost = node.cost
-                    return self.motion_primitives[best.ind[0]].u
+                    break
 
             else:
 
@@ -333,13 +372,21 @@ class ManeuverAutomaton:
 
                         mp = deepcopy(self.motion_primitives[i])
                         x_ = deepcopy(transform_state(mp.xEnd, deepcopy(node.x)))
-                        cost_ = node.cost + self.cost_function(x_, ref_traj, len(node.ind), x0, points)
+                        cost_ = node.cost + self.cost_function(x_, ref_traj, len(node.ind), x0, points) - 100*len(node.ind)
                         ind_ = deepcopy(node.ind)
                         ind_.append(i)
                         queue.append(Node(x_, ind_, cost_))
 
         # return control input for the best trajectory
         if not best:
-            raise Exception('Failed to find a feasible solution!')
+            u = self.u_prev
+            #u[0] = 0
+            #self.u_prev = u
+            print('Failed to find a feasible solution!')
+        else:
+            u = self.motion_primitives[best.ind[0]].u
+            self.u_prev = u
 
-        return self.motion_primitives[best.ind[0]].u
+        #self.visualization(x, y, theta, ref_traj, points, best)
+
+        return u

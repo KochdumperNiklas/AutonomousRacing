@@ -62,11 +62,11 @@ Auxiliary Classes
 class MotionPrimitive:
 # class representing a single motion primitive
 
-    def __init__(self, x, u, length, width, wb, unite):
+    def __init__(self, x, u, length, width, unite):
     # class constructor
 
         # compute occupancy set
-        occ_set = self.construct_occupancy_set(x, u, length, width, wb, unite)
+        occ_set = self.construct_occupancy_set(x, length, width, unite)
 
         # object properties
         self.x = x                              # trajectory of the cars reference point
@@ -75,14 +75,14 @@ class MotionPrimitive:
         self.xEnd = x[x.shape[0]-1, :]          # final state of the trajectory
         self.occupancy_set = occ_set            # occupancy set (space occupied by the car)
 
-    def construct_occupancy_set(self, x, u, length, width, wb, unite):
+    def construct_occupancy_set(self, x, length, width, unite):
     # compute the space occupied by the car (represented as a union of polytopes)
 
         # vertices of the car
-        x_min = -length / 1.5
-        x_max = length / 1.5
+        x_min = -length/2
+        x_max = length/2
 
-        vert = np.array([[x_max, x_max, x_min, x_min], [width / 1.5, -width / 1.5, -width / 1.5, width / 1.5]])
+        vert = np.array([[x_max, x_max, x_min, x_min], [width/2, -width/2, -width/2, width/2]])
 
         # group trajectory points together into batches
         batches = np.arange(0, x.shape[0], unite)
@@ -233,7 +233,9 @@ class ManeuverAutomaton:
                     x = simulate(x0, u, t, self.params)
 
                     # construct the motion primitive
-                    list_MP.append(MotionPrimitive(x, u, self.length, self.width, self.WB, self.UNITE))
+                    length = self.length * self.scale_length
+                    width = self.width * self.scale_width
+                    list_MP.append(MotionPrimitive(x, u, length, width, self.UNITE))
                     ind.append(cnt)
                     cnt = cnt + 1
 
@@ -269,13 +271,18 @@ class ManeuverAutomaton:
         self.vel_init = vel_init                            # initial velocities for motion primitives
         self.steer = steer                                  # steering inputs for motion primitives
         self.vel = vel                                      # velocity inputs for motion primitives
-        self.Q = Q
+
+        # tuning parameter
+        self.Q = Q                                          # weighting matrix for the cost function
+        self.scale_length = 1.5                             # increase of the vehicle length for collision checking
+        self.scale_width = 1.5                              # increase of the vehicle width for collision checking
 
         # additional settings
         self.N_STEPS = N_STEPS                              # number of time steps for one motion primitive
         self.UNITE = UNITE                                  # number of time steps that are united for occupancy set
         self.LIDAR_STEP = LIDAR_STEP                        # number of lidar points that are skipped
         self.RACELINE = RACELINE                            # track the optimal raceline
+        self.VISUALIZE = VISUALIZE                          # visualize the planned trajectory
 
     def visualization(self, x, y, theta, ref_traj, lidar_data, best):
         """visualize the planned trajectory"""
@@ -387,6 +394,8 @@ class ManeuverAutomaton:
             u = self.motion_primitives[best.ind[0]].u
             self.u_prev = u
 
-        #self.visualization(x, y, theta, ref_traj, points, best)
+        # visualize the planned trajectory
+        if self.VISUALIZE:
+            self.visualization(x, y, theta, ref_traj, points, best)
 
         return u

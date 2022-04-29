@@ -6,8 +6,8 @@ from argparse import Namespace
 from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
-CONTROLLER = 'MPC_Linear'
-RACETRACK = 'SochiObstacles'
+CONTROLLER = 'ManeuverAutomaton'
+RACETRACK = 'Oschersleben'
 
 if __name__ == '__main__':
 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     if CONTROLLER == 'MPC_Linear':
         controller = MPC_Linear(RACETRACK, env.params, conf.wpt_path)
     elif CONTROLLER == 'ManeuverAutomaton':
-        controller = ManeuverAutomaton(RACETRACK, env.params)
+        controller = ManeuverAutomaton(RACETRACK, env.params, conf.wpt_path)
     else:
         raise Exception('Specified controller not available!')
 
@@ -55,7 +55,7 @@ if __name__ == '__main__':
         # update counter and check if lap is finished
         control_count = control_count + 1
 
-        if obs['lap_counts'] == 1:
+        if obs['lap_counts'] == 2:
             break
 
     # print results

@@ -138,12 +138,12 @@ class MPC_Linear:
         """compute the drivable area"""
 
         # convert lidar data to polygon of safe states
-        lidar_data = lidar_data + np.array([[self.WB], [0]])
+        lidar_data = lidar_data
         pgon_safe = free_space(lidar_data)
 
         # initialize drivable area
-        x_min = -self.length/2 + self.WB/2
-        x_max = self.length/2 + self.WB/2
+        x_min = -self.length/2
+        x_max = self.length/2
         y_min = -self.width
         y_max = self.width
         v_min = v
@@ -157,10 +157,10 @@ class MPC_Linear:
         for i in range(1, self.N+1):
 
             # propagate drivable area forward in time
-            x_max = x_max + v_max*self.DT + 0.5*self.MAX_ACCEL*(self.DT**2)
-            x_min = x_min + v_min*self.DT - 0.5*self.MAX_ACCEL*(self.DT**2)
-            v_max = v_max + self.MAX_ACCEL*self.DT
-            v_min = v_min - self.MAX_ACCEL*self.DT
+            v_max = min(self.MAX_SPEED, v_max + self.MAX_ACCEL*self.DT)
+            v_min = max(self.MIN_SPEED, v_min - self.MAX_ACCEL*self.DT)
+            x_max = x_max + v_max*self.DT
+            x_min = x_min + v_min*self.DT
             y_max = y_max + v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
             y_min = y_min - v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
 

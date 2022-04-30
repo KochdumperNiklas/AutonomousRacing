@@ -14,4 +14,6 @@ MAX_STEER = np.deg2rad(24.0)                               # maximum steering an
 MAX_DSTEER = np.deg2rad(180.0)                             # maximum steering speed [rad/s]
 MAX_SPEED = 9                                              # maximum speed [m/s]
 MIN_SPEED = 0                                              # minimum backward speed [m/s]
-MAX_ACCEL = 11.5                                            # maximum acceleration [m/s**2]
+MAX_ACCEL = 11.5                                           # maximum acceleration [m/s**2]
+
+DRIVE_AREA = True

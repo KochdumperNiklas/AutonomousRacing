@@ -45,8 +45,11 @@ class MPC_Linear:
         pred_traj = self.get_predicted_trajectory(x, y, theta, v)
 
         # compute drivable area
-        lidar_data = process_lidar_data(scans)
-        drive_area = self.drivable_area2(x, y, v, theta, lidar_data)
+        drive_area = None
+
+        if self.DRIVE_AREA:
+            lidar_data = process_lidar_data(scans)
+            drive_area = self.drivable_area(x, y, v, theta, lidar_data)
 
         # plan new trajectory using MPC
         x0 = np.array([x, y, v, theta])
@@ -84,11 +87,12 @@ class MPC_Linear:
             A, B, C = self.linearized_dynamic_function(pred_traj[2, i], pred_traj[3, i], 0)
             constraints += [x[:, i + 1] == A @ x[:, i] + B @ u[:, i] + C]
 
-            d = np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))
-            s = cvxpy.Variable((len(d), ))
-            constraints += [drive_area[i].c @ x[0:2, i + 1] <= d + s]
-            constraints += [np.zeros((len(d), )) <= s]
-            objective += cvxpy.quad_form(s, 200*np.identity(len(d)))
+            if self.DRIVE_AREA:
+                d = np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))
+                s = cvxpy.Variable((len(d), ))
+                constraints += [drive_area[i].c @ x[0:2, i + 1] <= d + s]
+                constraints += [np.zeros((len(d), )) <= s]
+                objective += cvxpy.quad_form(s, 200*np.identity(len(d)))
 
             if i < (self.N - 1):
                 objective += cvxpy.quad_form(u[:, i + 1] - u[:, i], self.Rd)
@@ -131,11 +135,10 @@ class MPC_Linear:
 
         return pred_traj
 
-    def drivable_area2(self, x, y, v, theta, lidar_data):
+    def drivable_area(self, x, y, v, theta, lidar_data):
         """compute the drivable area"""
 
         # convert lidar data to polygon of safe states
-        lidar_data = lidar_data
         pgon_safe = free_space(lidar_data)
 
         # initialize drivable area
@@ -164,15 +167,7 @@ class MPC_Linear:
             pgon = Polygon(np.array([x_min, x_min, x_max, x_max]), np.array([y_min, y_max, y_max, y_min]))
 
             # compute intersection with set of safe states
-            try:
-                pgon_tmp = pgon & pgon_safe
-            except:
-                for p in drive_area:
-                    try:
-                        p.plot('r')
-                    except:
-                        est = 1
-                pgon_safe.plot('b')
+            pgon_tmp = pgon & pgon_safe
 
             # determine largest convex subset of the set
             pgon_drive = pgon_tmp.largest_convex_subset()
@@ -192,113 +187,7 @@ class MPC_Linear:
             # compute interval enclosure (= initial set for next iteration)
             x_min, x_max, y_min, y_max = pgon_drive.interval()
 
-        """for p in drive_area:
-            try:
-                v = p.vertices()
-            except:
-                for p in drive_area:
-                    try:
-                        p.plot('b')
-                    except:
-                        test = 1
-
-                p = np.dot(np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]),
-                           lidar_data) + np.array([[x], [y]])
-                plt.plot(p[0, :], p[1, :], '.r')
-                plt.plot(x, y, '.k')
-                plt.show()
-                test = 1"""
-
-        """for p in drive_area:
-            p.plot('b')
-
-        p = np.dot(np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]), lidar_data) + np.array([[x], [y]])
-        plt.plot(p[0, :], p[1, :], '.r')
-        plt.plot(x, y, '.k')
-        plt.show()"""
-
         return drive_area
-
-
-    def drivable_area(self, x, y, v, theta, lidar_data):
-        """compute the drivable area"""
-
-        N = 20
-        drive_area = []
-
-        # initialize drivable area
-        x_min = 0
-        x_max = 0
-        y_min = -self.width
-        y_max = self.width
-        v_min = v
-        v_max = v
-
-        # loop over all time steps
-        for i in range(1, self.N+1):
-
-            # propagate drivable area forward in time
-            x_max = x_max + v_max*self.DT + 0.5*self.MAX_ACCEL*(self.DT**2)
-            x_min = x_min + v_min*self.DT - 0.5*self.MAX_ACCEL*(self.DT**2)
-            y_max = y_max + v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
-            y_min = y_min - v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
-            v_max = v_max + self.MAX_ACCEL*self.DT
-            v_min = v_min - self.MAX_ACCEL*self.DT
-
-            C = np.concatenate((np.eye(2), -np.eye(2)), axis=0)
-            d = np.array([[x_max], [y_max], [-x_min], [-y_min]])
-            poly = Polytope(C, d)
-
-            # determine points that are inside the drivable area
-            tmp = np.max(np.dot(poly.c, lidar_data) - np.dot(poly.d, np.ones((1, lidar_data.shape[1]))), axis=0)
-            ind = [i for i in range(len(tmp)) if tmp[i] < 0]
-
-            # intersect with the obstacles
-            grid = np.ones((N, N))
-
-            dx = (x_max - x_min)/N
-            dy = (y_max - y_min)/N
-            c_x = (x_max + x_min)/2
-            c_y = (y_max + y_min)/2
-
-            for j in ind:
-                ind1 = np.floor((lidar_data[0, j] - c_x)/dx + N/2).astype(int)
-                ind2 = np.floor((lidar_data[1, j] - c_y)/dy + N/2).astype(int)
-                grid[min(ind2, N-1), min(ind1, N-1)] = 0
-
-            rect = lir.lir(grid.astype(bool))
-
-            x_min = c_x + (rect[0] - N/2)*dx
-            x_max = c_x + (rect[0] + rect[2] - N/2)*dx
-            y_min = c_y + (rect[1] - N/2)*dy
-            y_max = c_y + (rect[1] + rect[3] - N/2)*dy
-
-            poly_ = Polytope(poly.c, np.array([[x_max], [y_max-1.2*self.width/2], [-x_min], [-y_min-1.2*self.width/2]]))
-
-            """# Debug
-            poly.plot('r')
-            poly_.plot('k')
-            plt.plot(lidar_data[0, :], lidar_data[1, :], '.b')
-            plt.plot(lidar_data[0, ind], lidar_data[1, ind], '.g')
-            plt.show()"""
-
-            # transform from local to global coordinate frame
-            area = poly_
-            area.rotate(theta)
-            area.shift(np.array([[x], [y]]))
-
-            drive_area.append(area)
-
-        """colors = ['r', 'b', 'g', 'k', 'y', 'r', 'b', 'g', 'k', 'y']
-
-        for i in range(len(drive_area)):
-            drive_area[i].plot(colors[i])
-
-        plt.plot(x, y, '.k')
-        plt.show()"""
-
-        return drive_area
-
 
     def dynamic_function(self, x, u):
         """differential equation for the kinematic single track model"""
@@ -399,3 +288,6 @@ class MPC_Linear:
         self.MAX_SPEED = MAX_SPEED                                      # maximum speed [m/s]
         self.MIN_SPEED = MIN_SPEED                                      # minimum backward speed [m/s]
         self.MAX_ACCEL = MAX_ACCEL                                      # maximum acceleration [m/s**2]
+
+        # additional settings
+        self.DRIVE_AREA = DRIVE_AREA                                    # restrict MPC to driveable area

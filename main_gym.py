@@ -6,8 +6,9 @@ from argparse import Namespace
 from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
-CONTROLLER = 'ManeuverAutomaton'
+CONTROLLER = 'MPC_Linear'
 RACETRACK = 'Oschersleben'
+VISUALIZE = True
 
 if __name__ == '__main__':
 
@@ -24,9 +25,9 @@ if __name__ == '__main__':
 
     # initialize the motion planner
     if CONTROLLER == 'MPC_Linear':
-        controller = MPC_Linear(RACETRACK, env.params, conf.wpt_path)
+        controller = MPC_Linear(RACETRACK, env.params, conf.wpt_path, VISUALIZE)
     elif CONTROLLER == 'ManeuverAutomaton':
-        controller = ManeuverAutomaton(RACETRACK, env.params, conf.wpt_path)
+        controller = ManeuverAutomaton(RACETRACK, env.params, conf.wpt_path, VISUALIZE)
     else:
         raise Exception('Specified controller not available!')
 

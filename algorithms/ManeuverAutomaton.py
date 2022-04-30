@@ -172,11 +172,12 @@ Motion Planner
 class ManeuverAutomaton:
     """class representing a maneuver automaton motion planner"""
 
-    def __init__(self, racetrack, params, path):
+    def __init__(self, racetrack, params, path, visualize):
         """class constructor"""
 
         # load controller settings
         self.load_controller_settings(racetrack)
+        self.VISUALIZE = visualize
 
         # load optimal raceline
         if self.RACELINE:
@@ -282,22 +283,27 @@ class ManeuverAutomaton:
         self.UNITE = UNITE                                  # number of time steps that are united for occupancy set
         self.LIDAR_STEP = LIDAR_STEP                        # number of lidar points that are skipped
         self.RACELINE = RACELINE                            # track the optimal raceline
-        self.VISUALIZE = VISUALIZE                          # visualize the planned trajectory
 
-    def visualization(self, x, y, theta, ref_traj, lidar_data, best):
+    def visualization(self, x, y, theta, lidar_data, best):
         """visualize the planned trajectory"""
 
         if best:
             plt.cla()
-            rl = self.raceline[0:2, :] - np.array([[x], [y]])
-            rl = np.dot(np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]), rl)
-            plt.plot(lidar_data[0, :], lidar_data[1, :], '.r')
+            plt.plot(lidar_data[0, :], lidar_data[1, :], '.r', label='lidar measurements')
+            if self.RACELINE:
+                rl = self.raceline[0:2, :] - np.array([[x], [y]])
+                rl = np.dot(np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]), rl)
+                plt.plot(rl[0, :], rl[1, :], 'g', label='optimal raceline')
             plot_trajectory(self.motion_primitives, best.ind, 'b')
-            plt.plot(rl[0, :], rl[1, :], 'g')
-            plt.plot(ref_traj[0, :], ref_traj[1, :], 'm')
             plt.axis('equal')
-            plt.xlim([np.min(lidar_data[0, :])-2, np.max(lidar_data[0, :])+2])
-            plt.ylim([np.min(lidar_data[1, :])-2, np.max(lidar_data[1, :])+2])
+            x_min = np.min(lidar_data[0, :])-2
+            x_max = np.max(lidar_data[0, :])+2
+            y_min = np.min(lidar_data[1, :])-2
+            y_max = np.max(lidar_data[1, :])+2
+            plt.plot([x_max + 1, x_max + 1], [y_max + 1, y_max + 1], 'b', label='occupancy set planned trajectory')
+            plt.xlim([x_min, x_max])
+            plt.ylim([y_min, y_max])
+            plt.legend(loc='upper right')
             plt.pause(0.1)
 
     def cost_function(self, x, ref_traj, ind, x0, lidar_data):
@@ -316,7 +322,6 @@ class ManeuverAutomaton:
     def plan(self, x, y, theta, v, scans):
         """plan a trajectory"""
 
-        print('velocity: ', v)
         x0 = np.array([x, y, 0, v, theta, 0, 0])
 
         # transform lidar data into point cloud
@@ -388,8 +393,6 @@ class ManeuverAutomaton:
         # return control input for the best trajectory
         if not best:
             u = self.u_prev
-            #u[0] = 0
-            #self.u_prev = u
             print('Failed to find a feasible solution!')
         else:
             u = self.motion_primitives[best.ind[0]].u
@@ -397,6 +400,6 @@ class ManeuverAutomaton:
 
         # visualize the planned trajectory
         if self.VISUALIZE:
-            self.visualization(x, y, theta, ref_traj, points, best)
+            self.visualization(x, y, theta, points, best)
 
         return u

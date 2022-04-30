@@ -15,12 +15,13 @@ from auxiliary.free_space import free_space
 class MPC_Linear:
     """class representing an MPC controller that tracks the optimal raceline"""
 
-    def __init__(self, racetrack, params, path):
+    def __init__(self, racetrack, params, path, visualize):
         """object constructor"""
 
         # load optimal raceline and controller settings
         self.raceline = load_raceline(path)
         self.load_controller_settings(racetrack)
+        self.VISUALIZE = visualize
 
         # wheelbase and width/length of the car
         self.WB = params['lf'] + params['lr']
@@ -36,8 +37,6 @@ class MPC_Linear:
 
         v = np.max((v, 0.1))
 
-        print(v)
-
         # get reference trajectory
         ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v, self.N, self.DT, self.ind_prev)
         self.ind_prev = ind
@@ -51,22 +50,19 @@ class MPC_Linear:
 
         # plan new trajectory using MPC
         x0 = np.array([x, y, v, theta])
-        self.u_prev = self.mpc_optimization(x0, ref_traj, pred_traj, drive_area)
+        [u, traj] = self.mpc_optimization(x0, ref_traj, pred_traj, drive_area)
 
-        if self.u_prev is None:
+        if u is None:
+            print('Failed to find a feasible solution!')
+            u = self.u_prev
 
-            colors = ['r', 'b', 'g', 'r', 'b', 'g', 'r', 'b', 'g', 'r']
+        self.u_prev = u
 
-            for i in range(len(drive_area)):
-                drive_area[i].plot(colors[i])
+        # visualize the planned trajectory
+        if self.VISUALIZE:
+            self.visualization(x, y, theta, traj, scans, drive_area)
 
-            p = np.dot(np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]),
-                       lidar_data) + np.array([[x], [y]])
-            plt.plot(p[0, :], p[1, :], '.r')
-            plt.plot(x, y, '.k')
-            plt.show()
-
-        return v + self.u_prev[0, 0] * self.DT, self.u_prev[1, 0]
+        return v + u[0, 0] * self.DT, u[1, 0]
 
     def mpc_optimization(self, x0, ref_traj, pred_traj, drive_area):
         """solve optimal control problem for MPC"""
@@ -109,15 +105,16 @@ class MPC_Linear:
 
         # solve the optimal control problem
         prob = cvxpy.Problem(cvxpy.Minimize(objective), constraints)
-        prob.solve(solver=cvxpy.GUROBI, verbose=False, warm_start=True)
+        prob.solve(solver=cvxpy.OSQP, verbose=False, warm_start=True)
 
         if prob.status == cvxpy.OPTIMAL or prob.status == cvxpy.OPTIMAL_INACCURATE:
             u = u.value
+            traj = x.value
         else:
-            print("Error: Cannot solve mpc..")
             u = None
+            traj = None
 
-        return u
+        return u, traj
 
     def get_predicted_trajectory(self, x, y, theta, v):
         """predict trajectory based on the previous control inputs"""
@@ -176,7 +173,6 @@ class MPC_Linear:
                     except:
                         est = 1
                 pgon_safe.plot('b')
-                test = 1
 
             # determine largest convex subset of the set
             pgon_drive = pgon_tmp.largest_convex_subset()
@@ -341,6 +337,38 @@ class MPC_Linear:
         C[3] = - self.DT * v * steer / (self.WB * math.cos(steer) ** 2)
 
         return A, B, C
+
+    def visualization(self, x, y, theta, traj, scans, drive_area):
+        """visualize the planned trajectory"""
+
+        if not traj is None:
+            lidar_data = process_lidar_data(scans)
+            x_min = np.min(lidar_data[0, :])-2
+            x_max = np.max(lidar_data[0, :])+2
+            y_min = np.min(lidar_data[1, :])-2
+            y_max = np.max(lidar_data[1, :])+2
+            plt.cla()
+            plt.plot(lidar_data[0, :], lidar_data[1, :], '.r', label='lidar measurements')
+            rl = self.raceline[0:2, :] - np.array([[x], [y]])
+            rl = np.dot(np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]), rl)
+            plt.plot(rl[0, :], rl[1, :], 'g', label='optimal raceline')
+            tr = traj[0:2, :] - np.array([[x], [y]])
+            tr = np.dot(np.array([[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]), tr)
+            if drive_area:
+                for d in drive_area:
+                    d.shift(-np.array([[x], [y]]))
+                    d.rotate(-theta)
+                    try:
+                        d.plot('y')
+                    except:
+                        test = 1
+                plt.plot([x_max + 1, x_max + 1], [y_max + 1, y_max + 1], 'y', label='driveable area')
+            plt.plot(tr[0, :], tr[1, :], 'b', label='planned trajectory')
+            plt.axis('equal')
+            plt.xlim([x_min, x_max])
+            plt.ylim([y_min, y_max])
+            plt.legend(loc='upper right')
+            plt.pause(0.1)
 
     def load_controller_settings(self, racetrack):
         """load settings for the MPC controller"""

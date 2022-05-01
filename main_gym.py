@@ -36,19 +36,14 @@ if __name__ == '__main__':
 
     # initialize auxiliary variables
     laptime = 0.0
-    control_lim = np.ceil(1 / (settings['freq'] * env.timestep)).astype(int)
-    control_count = control_lim
     start = time.time()
 
     # main control loop
     while not done:
 
         # re-plan trajectory
-        if control_count == control_lim:
-
-            speed, steer = controller.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0],
+        speed, steer = controller.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0],
                                            obs['linear_vels_x'][0], obs['scans'][0])
-            control_count = 0
 
         # update the simulation environment
         obs, step_reward, done, info = env.step(np.array([[steer, speed]]))
@@ -56,9 +51,7 @@ if __name__ == '__main__':
 
         env.render(mode='human')
 
-        # update counter and check if lap is finished
-        control_count = control_count + 1
-
+        # check if lap is finished
         if obs['lap_counts'] == 2:
             break
 

@@ -53,10 +53,20 @@ class ManeuverAutomaton:
         self.conn_mat = conn_mat                        # connectivity matrix (which motion primitives can be connected)
         self.indices = indices                          # list of indices mapping init. velocities to motion primitives
 
+        # initialize counter for re-planning
+        self.control_lim = np.ceil(1 / (settings['freq'] * 0.01)).astype(int)
+        self.control_count = self.control_lim
+
     def plan(self, x, y, theta, v, scans):
         """plan a trajectory"""
 
-        x0 = np.array([x, y, 0, v, theta, 0, 0])
+        # check if control frequency is reached
+        self.control_count += 1
+
+        if self.control_count <= self.control_lim:
+            return self.u_prev
+        else:
+            self.control_count = 0
 
         # transform lidar data into point cloud
         points = process_lidar_data(scans)

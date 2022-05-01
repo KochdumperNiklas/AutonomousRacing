@@ -45,12 +45,23 @@ class MPC_Linear:
         self.u_prev = np.zeros((2, self.settings['N']))
         self.ind_prev = 0
 
+        # initialize counter for re-planning
+        self.control_lim = np.ceil(1 / (settings['freq'] * 0.01)).astype(int)
+        self.control_count = self.control_lim
+
     def plan(self, x, y, theta, v, scans):
         """plan a trajectory using MPC"""
 
-        v = np.max((v, 0.1))
+        # check if control frequency is reached
+        self.control_count += 1
+
+        if self.control_count <= self.control_lim:
+            return v + self.u_prev[0, 0] * self.settings['DT'], self.u_prev[1, 0]
+        else:
+            self.control_count = 0
 
         # get reference trajectory
+        v = np.max((v, 0.1))
         ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v,
                                                  self.settings['N'], self.settings['DT'], self.ind_prev)
         self.ind_prev = ind

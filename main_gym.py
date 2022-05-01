@@ -3,11 +3,12 @@ import yaml
 import gym
 import numpy as np
 from argparse import Namespace
+from auxiliary.parse_settings import parse_settings
 from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 
 CONTROLLER = 'MPC_Linear'
-RACETRACK = 'Oschersleben'
+RACETRACK = 'SochiObstacles'
 VISUALIZE = True
 
 if __name__ == '__main__':
@@ -24,16 +25,18 @@ if __name__ == '__main__':
     env.render()
 
     # initialize the motion planner
+    settings = parse_settings(CONTROLLER, RACETRACK, VISUALIZE)
+
     if CONTROLLER == 'MPC_Linear':
-        controller = MPC_Linear(RACETRACK, env.params, conf.wpt_path, VISUALIZE)
+        controller = MPC_Linear(env.params, settings)
     elif CONTROLLER == 'ManeuverAutomaton':
-        controller = ManeuverAutomaton(RACETRACK, env.params, conf.wpt_path, VISUALIZE)
+        controller = ManeuverAutomaton(env.params, settings)
     else:
         raise Exception('Specified controller not available!')
 
     # initialize auxiliary variables
     laptime = 0.0
-    control_lim = np.ceil(1 / (controller.freq * env.timestep)).astype(int)
+    control_lim = np.ceil(1 / (settings['freq'] * env.timestep)).astype(int)
     control_count = control_lim
     start = time.time()
 

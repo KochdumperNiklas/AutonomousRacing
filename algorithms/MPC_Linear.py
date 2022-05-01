@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import cvxpy
+from os.path import exists
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from scipy.io import savemat
@@ -15,21 +16,33 @@ from auxiliary.free_space import free_space
 class MPC_Linear:
     """class representing an MPC controller that tracks the optimal raceline"""
 
-    def __init__(self, racetrack, params, path, visualize):
+    def __init__(self, params, settings):
         """object constructor"""
 
-        # load optimal raceline and controller settings
-        self.raceline = load_raceline(path)
-        self.load_controller_settings(racetrack)
-        self.VISUALIZE = visualize
+        # store algorithm settings
+        settings['R'] = np.diag(settings['R'])
+        settings['Rd'] = np.diag(settings['Rd'])
+        settings['Q'] = np.diag(settings['Q'])
+        settings['Qf'] = np.diag(settings['Qf'])
 
-        # wheelbase and width/length of the car
+        settings['MAX_STEER'] = np.deg2rad(settings['MAX_STEER'])
+        settings['MAX_DSTEER'] = np.deg2rad(settings['MAX_DSTEER'])
+
+        self.settings = settings
+
+        # load optimal raceline
+        if not exists(settings['path_raceline']):
+            raise Exception('No file raceline.csv found for this racetrack!')
+
+        self.raceline = load_raceline(settings['path_raceline'])
+
+        # wheelbase and length/widht of the car
         self.WB = params['lf'] + params['lr']
         self.width = params['width']
         self.length = params['length']
 
         # initialize previous control inputs and index of closest raceline point
-        self.u_prev = np.zeros((2, self.N))
+        self.u_prev = np.zeros((2, self.settings['N']))
         self.ind_prev = 0
 
     def plan(self, x, y, theta, v, scans):
@@ -38,7 +51,8 @@ class MPC_Linear:
         v = np.max((v, 0.1))
 
         # get reference trajectory
-        ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v, self.N, self.DT, self.ind_prev)
+        ref_traj, ind = get_reference_trajectory(self.raceline, x, y, theta, v,
+                                                 self.settings['N'], self.settings['DT'], self.ind_prev)
         self.ind_prev = ind
 
         # predict expected trajectory based on the previous control inputs (for linearization points)
@@ -47,7 +61,7 @@ class MPC_Linear:
         # compute drivable area
         drive_area = None
 
-        if self.DRIVE_AREA:
+        if self.settings['DRIVE_AREA']:
             lidar_data = process_lidar_data(scans)
             drive_area = self.drivable_area(x, y, v, theta, lidar_data)
 
@@ -62,50 +76,50 @@ class MPC_Linear:
         self.u_prev = u
 
         # visualize the planned trajectory
-        if self.VISUALIZE:
+        if self.settings['VISUALIZE']:
             self.visualization(x, y, theta, traj, scans, drive_area)
 
-        return v + u[0, 0] * self.DT, u[1, 0]
+        return v + u[0, 0] * self.settings['DT'], u[1, 0]
 
     def mpc_optimization(self, x0, ref_traj, pred_traj, drive_area):
         """solve optimal control problem for MPC"""
 
         # initialization
-        x = cvxpy.Variable((4, self.N + 1))
-        u = cvxpy.Variable((2, self.N))
+        x = cvxpy.Variable((4, self.settings['N'] + 1))
+        u = cvxpy.Variable((2, self.settings['N']))
         objective = 0.0
         constraints = []
 
         # objective function for optimal control problem
-        for i in range(self.N):
+        for i in range(self.settings['N']):
 
-            objective += cvxpy.quad_form(u[:, i], self.R)
+            objective += cvxpy.quad_form(u[:, i], self.settings['R'])
 
             if i != 0:
-                objective += cvxpy.quad_form(ref_traj[:, i] - x[:, i], self.Q)
+                objective += cvxpy.quad_form(ref_traj[:, i] - x[:, i], self.settings['Q'])
 
             A, B, C = self.linearized_dynamic_function(pred_traj[2, i], pred_traj[3, i], 0)
             constraints += [x[:, i + 1] == A @ x[:, i] + B @ u[:, i] + C]
 
-            if self.DRIVE_AREA:
+            if self.settings['DRIVE_AREA']:
                 d = np.resize(drive_area[i].d, (drive_area[i].d.shape[0], ))
                 s = cvxpy.Variable((len(d), ))
                 constraints += [drive_area[i].c @ x[0:2, i + 1] <= d + s]
                 constraints += [np.zeros((len(d), )) <= s]
                 objective += cvxpy.quad_form(s, 200*np.identity(len(d)))
 
-            if i < (self.N - 1):
-                objective += cvxpy.quad_form(u[:, i + 1] - u[:, i], self.Rd)
-                constraints += [cvxpy.abs(u[1, i + 1] - u[1, i]) <= self.MAX_DSTEER * self.DT]
+            if i < (self.settings['N'] - 1):
+                objective += cvxpy.quad_form(u[:, i + 1] - u[:, i], self.settings['Rd'])
+                constraints += [cvxpy.abs(u[1, i + 1] - u[1, i]) <= self.settings['MAX_DSTEER'] * self.settings['DT']]
 
-        objective += cvxpy.quad_form(ref_traj[:, self.N] - x[:, self.N], self.Qf)
+        objective += cvxpy.quad_form(ref_traj[:, self.settings['N']] - x[:, self.settings['N']], self.settings['Qf'])
 
         # constraints for the optimal control problem
         constraints += [x[:, 0] == x0]
-        constraints += [x[2, :] <= self.MAX_SPEED]
-        constraints += [x[2, :] >= self.MIN_SPEED]
-        constraints += [cvxpy.abs(u[0, :]) <= self.MAX_ACCEL]
-        constraints += [cvxpy.abs(u[1, :]) <= self.MAX_STEER]
+        constraints += [x[2, :] <= self.settings['MAX_SPEED']]
+        constraints += [x[2, :] >= self.settings['MIN_SPEED']]
+        constraints += [cvxpy.abs(u[0, :]) <= self.settings['MAX_ACCEL']]
+        constraints += [cvxpy.abs(u[1, :]) <= self.settings['MAX_STEER']]
 
         # solve the optimal control problem
         prob = cvxpy.Problem(cvxpy.Minimize(objective), constraints)
@@ -125,13 +139,15 @@ class MPC_Linear:
 
         # initialization
         state = np.array([x, y, v, theta])
-        pred_traj = np.zeros((4, self.N+1))
+        pred_traj = np.zeros((4, self.settings['N']+1))
         pred_traj[:, 0] = state
 
         # loop over all time steps
         for i in range(self.u_prev.shape[1]):
-            pred_traj[:, i+1] = pred_traj[:, i] + self.dynamic_function(pred_traj[:, i], self.u_prev[:, i]) * self.DT
-            pred_traj[2, i+1] = np.max((np.min((pred_traj[2, i+1], self.MAX_SPEED)), self.MIN_SPEED))
+            pred_traj[:, i+1] = pred_traj[:, i] + self.dynamic_function(pred_traj[:, i],
+                                                                        self.u_prev[:, i]) * self.settings['DT']
+            pred_traj[2, i+1] = np.max((np.min((pred_traj[2, i+1],
+                                                self.settings['MAX_SPEED'])), self.settings['MIN_SPEED']))
 
         return pred_traj
 
@@ -150,19 +166,19 @@ class MPC_Linear:
         v_max = v
 
         car = Polygon(np.array([x_min, x_min, x_max, x_max]),
-                      np.array([-self.width/1, self.width/1, self.width/1, -self.width/1]))
+                      np.array([-self.width, self.width, self.width, -self.width]))
         drive_area = []
 
         # loop over all time steps
-        for i in range(1, self.N+1):
+        for i in range(1, self.settings['N']+1):
 
             # propagate drivable area forward in time
-            v_max = min(self.MAX_SPEED, v_max + self.MAX_ACCEL*self.DT)
-            v_min = max(self.MIN_SPEED, v_min - self.MAX_ACCEL*self.DT)
-            x_max = x_max + v_max*self.DT
-            x_min = x_min + v_min*self.DT
-            y_max = y_max + v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
-            y_min = y_min - v_max*np.sin(i*self.MAX_STEER*self.DT)*self.DT
+            v_max = min(self.settings['MAX_SPEED'], v_max + self.settings['MAX_ACCEL']*self.settings['DT'])
+            v_min = max(self.settings['MIN_SPEED'], v_min - self.settings['MAX_ACCEL']*self.settings['DT'])
+            x_max = x_max + v_max*self.settings['DT']
+            x_min = x_min + v_min*self.settings['DT']
+            y_max = y_max + v_max*np.sin(i*self.settings['MAX_STEER']*self.settings['DT'])*self.settings['DT']
+            y_min = y_min - v_max*np.sin(i*self.settings['MAX_STEER']*self.settings['DT'])*self.settings['DT']
 
             pgon = Polygon(np.array([x_min, x_min, x_max, x_max]), np.array([y_min, y_max, y_max, y_min]))
 
@@ -192,7 +208,7 @@ class MPC_Linear:
     def dynamic_function(self, x, u):
         """differential equation for the kinematic single track model"""
 
-        u[1] = np.max((np.min((u[1], self.MAX_STEER)), -self.MAX_STEER))
+        u[1] = np.max((np.min((u[1], self.settings['MAX_STEER'])), -self.settings['MAX_STEER']))
 
         return np.array([x[2] * math.cos(x[3]),
                          x[2] * math.sin(x[3]),
@@ -208,22 +224,22 @@ class MPC_Linear:
         A[1, 1] = 1.0
         A[2, 2] = 1.0
         A[3, 3] = 1.0
-        A[0, 2] = self.DT * math.cos(theta)
-        A[0, 3] = - self.DT * v * math.sin(theta)
-        A[1, 2] = self.DT * math.sin(theta)
-        A[1, 3] = self.DT * v * math.cos(theta)
-        A[3, 2] = self.DT * math.tan(steer) / self.WB
+        A[0, 2] = self.settings['DT'] * math.cos(theta)
+        A[0, 3] = - self.settings['DT'] * v * math.sin(theta)
+        A[1, 2] = self.settings['DT'] * math.sin(theta)
+        A[1, 3] = self.settings['DT'] * v * math.cos(theta)
+        A[3, 2] = self.settings['DT'] * math.tan(steer) / self.WB
 
         # input matrix B
         B = np.zeros((4, 2))
-        B[2, 0] = self.DT
-        B[3, 1] = self.DT * v / (self.WB * math.cos(steer) ** 2)
+        B[2, 0] = self.settings['DT']
+        B[3, 1] = self.settings['DT'] * v / (self.WB * math.cos(steer) ** 2)
 
         # constant offset
         C = np.zeros((4, ))
-        C[0] = self.DT * v * math.sin(theta) * theta
-        C[1] = - self.DT * v * math.cos(theta) * theta
-        C[3] = - self.DT * v * steer / (self.WB * math.cos(steer) ** 2)
+        C[0] = self.settings['DT'] * v * math.sin(theta) * theta
+        C[1] = - self.settings['DT'] * v * math.cos(theta) * theta
+        C[3] = - self.settings['DT'] * v * steer / (self.WB * math.cos(steer) ** 2)
 
         return A, B, C
 
@@ -258,36 +274,3 @@ class MPC_Linear:
             plt.ylim([y_min, y_max])
             plt.legend(loc='upper right')
             plt.pause(0.1)
-
-    def load_controller_settings(self, racetrack):
-        """load settings for the MPC controller"""
-
-        # load controller settings from file
-        path = 'racetracks/' + racetrack + '/settings_' + racetrack + '_MPC_Linear.txt'
-
-        with open(path) as f:
-            lines = f.readlines()
-
-        for l in lines:
-            exec(l, globals(), globals())
-
-        # weighting matrices for MPC
-        self.R = R                                                      # input cost matrix[accel, steer]
-        self.Rd = Rd                                                    # input difference cost matrix[accel, steer]
-        self.Q = Q                                                      # state cost matrix [x, y, v, yaw]
-        self.Qf = Qf                                                    # final state cost matrix [x, y, v, yaw]
-
-        # motion planning parameter
-        self.DT = DT                                                    # time step size [s]
-        self.N = N                                                      # number of time steps for MPC prediction
-        self.freq = freq                                                # planning frequency [Hz]
-
-        # input and state constraints
-        self.MAX_STEER = MAX_STEER                                      # maximum steering angle [rad]
-        self.MAX_DSTEER = MAX_DSTEER                                    # maximum steering speed [rad/s]
-        self.MAX_SPEED = MAX_SPEED                                      # maximum speed [m/s]
-        self.MIN_SPEED = MIN_SPEED                                      # minimum backward speed [m/s]
-        self.MAX_ACCEL = MAX_ACCEL                                      # maximum acceleration [m/s**2]
-
-        # additional settings
-        self.DRIVE_AREA = DRIVE_AREA                                    # restrict MPC to driveable area

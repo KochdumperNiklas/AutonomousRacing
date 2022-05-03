@@ -1,5 +1,7 @@
 import rospy
 import numpy as np
+from auxiliary.parse_settings import parse_settings
+from algorithms import *
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry

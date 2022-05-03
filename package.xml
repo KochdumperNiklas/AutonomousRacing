@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>AutonomousRacing</name>
+  <version>0.0.0</version>
+  <description>Control algorithms for autonomous racing with a F1tenth racecar</description>
+  <maintainer email="niklas.kochdumper@stonybrook.edu">Niklas Kochdumper</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>rospy</exec_depend>
+  <export>
+  </export>
+</package>

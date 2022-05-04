@@ -3,15 +3,28 @@ import yaml
 import gym
 import numpy as np
 from argparse import Namespace
+import warnings
 from auxiliary.parse_settings import parse_settings
-from algorithms.MPC_Linear import MPC_Linear
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
+from algorithms.MPC_Linear import MPC_Linear
 
-CONTROLLER = 'MPC_Linear'
-RACETRACK = 'SochiObstacles'
+CONTROLLER = ['MPC_Linear']
+RACETRACK = 'Oschersleben'
 VISUALIZE = True
 
 if __name__ == '__main__':
+
+    # parse users arguments
+    if len(CONTROLLER) > 2:
+        raise Exception('At most two motion planners are supported for head-to-head racing!')
+
+    for s in CONTROLLER:
+        if s not in ['ManeuverAutomaton', 'MPC_Linear']:
+            raise Exception('Specified controller not available!')
+
+    if len(CONTROLLER) > 1 and VISUALIZE:
+        VISUALIZE = False
+        warnings.warn('Visualization is only supported for single agent racing!')
 
     # load the configuration for the desired Racetrack
     path = 'racetracks/' + RACETRACK + '/config_' + RACETRACK + '.yaml'
@@ -20,19 +33,20 @@ if __name__ == '__main__':
     conf = Namespace(**conf_dict)
 
     # create the simulation environment and initialize it
-    env = gym.make('f110_gym:f110-v0', map=conf.map_path, map_ext=conf.map_ext, num_agents=1)
-    obs, step_reward, done, info = env.reset(np.array([[conf.sx, conf.sy, conf.stheta]]))
+    env = gym.make('f110_gym:f110-v0', map=conf.map_path, map_ext=conf.map_ext, num_agents=len(CONTROLLER))
+    if len(CONTROLLER) == 1:
+        obs, _, done, _ = env.reset(np.array([[conf.sx, conf.sy, conf.stheta]]))
+    else:
+        obs, _, done, _ = env.reset(np.array([[conf.sx, conf.sy, conf.stheta], [conf.sx2, conf.sy2, conf.stheta2]]))
     env.render()
 
     # initialize the motion planner
-    settings = parse_settings(CONTROLLER, RACETRACK, VISUALIZE)
+    controller = []
 
-    if CONTROLLER == 'MPC_Linear':
-        controller = MPC_Linear(env.params, settings)
-    elif CONTROLLER == 'ManeuverAutomaton':
-        controller = ManeuverAutomaton(env.params, settings)
-    else:
-        raise Exception('Specified controller not available!')
+    for i in range(len(CONTROLLER)):
+        settings = parse_settings(CONTROLLER[i], RACETRACK, VISUALIZE)
+        exec('tmp = ' + CONTROLLER[i] + '(env.params, settings)')
+        controller.append(tmp)
 
     # initialize auxiliary variables
     laptime = 0.0
@@ -42,17 +56,21 @@ if __name__ == '__main__':
     while not done:
 
         # re-plan trajectory
-        speed, steer = controller.plan(obs['poses_x'][0], obs['poses_y'][0], obs['poses_theta'][0],
-                                           obs['linear_vels_x'][0], obs['scans'][0])
+        actions = []
+
+        for i in range(len(controller)):
+            speed, steer = controller[i].plan(obs['poses_x'][i], obs['poses_y'][i], obs['poses_theta'][i],
+                                              obs['linear_vels_x'][i], obs['scans'][i])
+            actions.append([steer, speed])
 
         # update the simulation environment
-        obs, step_reward, done, info = env.step(np.array([[steer, speed]]))
+        obs, step_reward, done, _ = env.step(np.asarray(actions))
         laptime += step_reward
 
         env.render(mode='human')
 
         # check if lap is finished
-        if obs['lap_counts'] == 2:
+        if np.max(obs['lap_counts']) == 2:
             break
 
     # print results

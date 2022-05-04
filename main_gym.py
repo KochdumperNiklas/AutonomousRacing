@@ -10,7 +10,7 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
 
-CONTROLLER = ['DisparityExtender']
+CONTROLLER = ['MPC_Linear']
 RACETRACK = 'Oschersleben'
 VISUALIZE = True
 

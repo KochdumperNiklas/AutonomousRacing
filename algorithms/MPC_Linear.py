@@ -31,9 +31,6 @@ class MPC_Linear:
         self.settings = settings
 
         # load optimal raceline
-        if not exists(settings['path_raceline']):
-            raise Exception('No file raceline.csv found for this racetrack!')
-
         self.raceline = load_raceline(settings['path_raceline'])
 
         # wheelbase and length/widht of the car

@@ -30,9 +30,6 @@ class ManeuverAutomaton:
 
         # load optimal raceline
         if settings['RACELINE']:
-            if not exists(settings['path_raceline']):
-                raise Exception('No file raceline.csv found for this racetrack!')
-
             self.raceline = load_raceline(settings['path_raceline'])
             self.ind_prev = 0
 

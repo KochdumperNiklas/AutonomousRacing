@@ -1,7 +1,10 @@
 import rospy
 import numpy as np
 from auxiliary.parse_settings import parse_settings
-from algorithms import *
+from algorithms.ManeuverAutomaton import ManeuverAutomaton
+from algorithms.MPC_Linear import MPC_Linear
+from algorithms.GapFollower import GapFollower
+from algorithms.DisparityExtender import DisparityExtender
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
@@ -45,7 +48,7 @@ def car_parameter():
 class PublisherSubscriber:
     """wrapper class that handles writing control commands and reading sensor measurements"""
 
-    def __init__(self, planner):
+    def __init__(self, controller):
         """class constructor"""
 
         # publisher
@@ -58,6 +61,9 @@ class PublisherSubscriber:
 
         # store motion planner
         self.controller = controller
+
+        # initialize control input
+        self.u = np.array([0.0, 0.0])
 
         # wait until first measurement is obtained
         rate = rospy.Rate(1000)
@@ -84,29 +90,22 @@ class PublisherSubscriber:
         """publish the current control commands"""
 
         msg = AckermannDriveStamped()
-        msg.drive.speed = self.u[1, 0]
-        msg.drive.steering_angle = self.u[0, 0]
+        msg.drive.speed = self.u[1]
+        msg.drive.steering_angle = self.u[0]
 
         self.pub.publish(msg)
 
     def callback_timer2(self, timer):
         """obtain new control commands from the controller"""
 
-        self.u = controller.plan(None, None, None, self.velocity, self.ranges)
+        self.u = self.controller.plan(None, None, None, self.velocity, self.lidar_data)
 
-if __name__ == '__main__':
-    """main entry point"""
+def start_controller():
 
     # initialize the motion planner
     params = car_parameter()
     settings = parse_settings(CONTROLLER, RACETRACK, False)
-
-    if CONTROLLER == 'MPC_Linear':
-        controller = MPC_Linear(params, settings)
-    elif CONTROLLER == 'ManeuverAutomaton':
-        controller = ManeuverAutomaton(params, settings)
-    else:
-        raise Exception('Specified controller not available!')
+    exec('controller = ' + CONTROLLER + '(params, settings)')
 
     # start control cycle
     PublisherSubscriber(controller)

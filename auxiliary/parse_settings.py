@@ -1,14 +1,17 @@
 from configobj import ConfigObj, flatten_errors
 from validate import Validator, VdtValueError, VdtTypeError
 from os.path import exists
+from os.path import abspath
+from os.path import dirname
 import warnings
 
 def parse_settings(algorithm, racetrack, visualize):
     """parse the algorithm settings defined by the user"""
 
     # load settings file
-    path = 'racetracks/' + racetrack + '/settings/' + algorithm + '.cfg'
-    path_config = 'settings/' + algorithm + '.cfg'
+    dirpath = dirname(dirname(abspath(__file__)))
+    path = dirpath + '/racetracks/' + racetrack + '/settings/' + algorithm + '.cfg'
+    path_config = dirpath + '/settings/' + algorithm + '.cfg'
 
     if not exists(path_config):
         msg = 'File /settings/%s.cfg defining the valid algorithm settings is missing for this algorithm!' % algorithm

@@ -1,6 +1,9 @@
 import numpy as np
 import math
 from copy import deepcopy
+from os.path import exists
+from os.path import abspath
+from os.path import dirname
 
 def get_reference_trajectory(raceline, x, y, theta, v, N, dt, ind_prev):
     """extract the reference trajectory piece for the current state"""
@@ -70,6 +73,11 @@ def closest_raceline_point(raceline, x, v, dt, ind_prev):
 
 def load_raceline(path):
     """load the optimal raceline from the corresponding file"""
+
+    path = dirname(dirname(abspath(__file__))) + '/' + path
+
+    if not exists(path):
+        raise Exception('No file raceline.csv found for this racetrack!')
 
     tmp = np.loadtxt(path, delimiter=';', skiprows=3)
     return np.transpose(tmp[:, [1, 2, 5, 3]])

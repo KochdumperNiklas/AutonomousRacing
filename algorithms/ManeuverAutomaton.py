@@ -1,6 +1,3 @@
-import time
-import yaml
-import gym
 import pypoman
 import operator
 import matplotlib.pyplot as plt

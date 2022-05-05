@@ -90,8 +90,8 @@ class PublisherSubscriber:
         """publish the current control commands"""
 
         msg = AckermannDriveStamped()
-        msg.drive.speed = self.u[1]
-        msg.drive.steering_angle = self.u[0]
+        msg.drive.speed = self.u[0]
+        msg.drive.steering_angle = self.u[1]
 
         self.pub.publish(msg)
 

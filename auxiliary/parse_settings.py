@@ -57,5 +57,6 @@ def parse_settings(algorithm, racetrack, visualize):
     # add path to the optimal raceline and visualization flag
     settings['path_raceline'] = 'racetracks/' + racetrack + '/raceline.csv'
     settings['VISUALIZE'] = visualize
+    settings['RACETRACK'] = racetrack
 
     return settings

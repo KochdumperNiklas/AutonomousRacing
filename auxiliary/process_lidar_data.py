@@ -16,3 +16,15 @@ def process_lidar_data(data):
         phi = phi + delta_phi
 
     return points
+
+def smooth_lidar(ranges, MAX_LIDAR_DIST, PREPROCESS_CONV_SIZE):
+    """smooth out the lidar scan"""
+
+    # don't use the LiDAR data from directly behind the car
+    proc_ranges = np.array(ranges[135:-135])
+
+    # sets each value to the mean over a given window
+    proc_ranges = np.convolve(proc_ranges, np.ones(PREPROCESS_CONV_SIZE), 'same') / PREPROCESS_CONV_SIZE
+    proc_ranges = np.clip(proc_ranges, 0, MAX_LIDAR_DIST)
+
+    return proc_ranges

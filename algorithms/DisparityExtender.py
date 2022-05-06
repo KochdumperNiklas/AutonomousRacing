@@ -148,4 +148,4 @@ class DisparityExtender:
         plt.xlim([x_min, x_max])
         plt.ylim([y_min, y_max])
         plt.legend(loc='upper right')
-        plt.pause(0.01)
+        plt.pause(0.001)

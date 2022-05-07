@@ -1,0 +1,12 @@
+map_path: './racetracks/StonyBrook/StonyBrook'
+map_ext: '.png'
+
+# Start Positition Single Vehicle Time Trial
+sx: 0
+sy: 0.2
+stheta: 3.14
+
+# Vehicle 2 (P2)
+sx2: 0.3
+sy2: -0.3
+stheta2: 3.14

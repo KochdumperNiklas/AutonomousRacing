@@ -97,7 +97,7 @@ class DisparityExtender:
     def get_num_points_to_cover(self, dist, width):
         """determine number of LiDAR points that correspond to the selected segment"""
 
-        angle = 2 * np.arcsin(width / (2 * dist))
+        angle = 2 * np.arcsin(min(max(-1.0, width / (2 * dist)), 1.0))
         num_points = int(np.ceil(angle / self.radians_per_point))
 
         return num_points

@@ -8,7 +8,7 @@ from shapely import geometry
 sys.path.insert(1, '../')
 from auxiliary.ScanSimulator import ScanSimulator
 
-RACETRACK = 'Oschersleben'
+RACETRACK = 'StonyBrook'
 
 if __name__ == '__main__':
     """generate inner- and outer-boundary of the racetrack and store them in a file"""

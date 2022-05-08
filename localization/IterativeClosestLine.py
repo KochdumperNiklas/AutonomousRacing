@@ -5,12 +5,14 @@ import matplotlib.pyplot as plt
 import alphashape
 import cv2
 import yaml
+import math
 import pandas as pd
 from copy import deepcopy
 from shapely import geometry
 from auxiliary.ScanSimulator import ScanSimulator
 from auxiliary.free_space import linesegment_refinement
 from auxiliary.Line import Line
+from auxiliary.Polytope import Polytope
 from auxiliary.vehicle_model import simulate
 from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.free_space import linesegment_refinement
@@ -25,7 +27,7 @@ class IterativeClosestLine:
         if racetrack.endswith('Obstacles'):
             racetrack = racetrack[:-9]
 
-        self.map = self.import_racetrack(racetrack)
+        self.map, self.pgon_inner, self.pgon_outer, self.map_centers = self.import_racetrack(racetrack)
 
         # safe the initial pose of the car as well as the car parameter
         self.x = x
@@ -42,9 +44,9 @@ class IterativeClosestLine:
         u = np.array([speed, steer])
         t = np.array([0, 0.01])
         traj = simulate(x0, u, t, self.params)
-        x_ = traj[-1, 0] + np.random.uniform(-0.1, 0.1)
-        y_ = traj[-1, 1] + np.random.uniform(-0.1, 0.1)
-        theta_ = traj[-1, 4] + np.random.uniform(-0.05, 0.05)
+        self.x = traj[-1, 0] + np.random.uniform(-0.1, 0.1)
+        self.y = traj[-1, 1] + np.random.uniform(-0.1, 0.1)
+        self.theta = traj[-1, 4] + np.random.uniform(-0.05, 0.05)
 
         # convert the lidar data to line segments
         points = process_lidar_data(scans)
@@ -54,16 +56,42 @@ class IterativeClosestLine:
         for s in tmp:
             segments.append(Line(s[:, [0]], s[:, [s.shape[1] - 1]]))
 
+        # determine relevant map segments that have to be considered
+        C = np.concatenate((np.identity(2), -np.identity(2)), axis=0)
+        d = np.array([[np.max(points[0, :]) + 2], [np.max(points[1, :]) + 2],
+                      [-np.min(points[0, :]) + 2], [-np.min(points[1, :]) + 2]])
+        poly = Polytope(C, d)
+        poly.rotate(self.theta)
+        poly.shift(np.array([[self.x], [self.y]]))
+
+        ind = np.where(np.max(np.dot(poly.c, self.map_centers) - poly.d, axis=0) <= 0)
+        map = [self.map[i] for i in ind[0]]
+
         # update pose estimation with iterative closest line algorithm
-        for i in range(2):
-            x_, y_, theta_ = self.iterative_closest_line(segments, x_, y_, theta_)
-        self.x = x_
-        self.y = y_
-        self.theta = theta_
+        if len(map) > 0:
+            x1, y1, theta1, length_shift = self.iterative_closest_line(segments, map, self.x, self.y, self.theta)
+
+            if length_shift < 1 and not self.pgon_inner.contains(geometry.Point(x1, y1)) and \
+                    self.pgon_outer.contains(geometry.Point(x1, y1)):
+                self.x = x1
+                self.y = y1
+                self.theta = theta1
+
+        # project estimated point back onto the racetrack if it is outside
+        if self.pgon_inner.contains(geometry.Point(self.x, self.y)) or \
+                not self.pgon_outer.contains(geometry.Point(self.x, self.y)):
+            dist = np.inf
+            for m in map:
+                p_, dist_ = self.closest_point_line(m, np.array([[self.x], [self.y]]))
+                if dist_ < dist:
+                    p = p_
+                    dist = dist_
+            self.x = p[0][0]
+            self.y = p[1][0]
 
         return self.x, self.y, self.theta
 
-    def iterative_closest_line(self, segments, x, y, theta):
+    def iterative_closest_line(self, segments, map, x, y, theta):
         # iterative closest line refinement for pattern matching
 
         # compute current rotation matrix and shift
@@ -83,10 +111,10 @@ class IterativeClosestLine:
         for i in range(len(segments_)):
             dist = np.inf
             c = segments_[i].center()
-            for j in range(len(self.map)):
-                _, dist_ = self.closest_point_line(self.map[j], c)
+            for j in range(len(map)):
+                _, dist_ = self.closest_point_line(map[j], c)
                 if dist_ < dist:
-                    dirs[:, [i]] = self.map[j].d
+                    dirs[:, [i]] = map[j].d
                     ind[i] = j
                     dist = dist_
 
@@ -109,7 +137,7 @@ class IterativeClosestLine:
         length = 0.0
 
         for i in range(len(segments)):
-            p = self.map[ind[i]]
+            p = map[ind[i]]
             s = (deepcopy(segments[i]) * R + o).center()
             tmp, _ = self.closest_point_line(p, s)
             o_ = o_ + segments[i].len * (tmp - s)
@@ -120,16 +148,16 @@ class IterativeClosestLine:
         # extract pose from rotation matrix and offset
         x = o[0][0]
         y = o[1][0]
-        theta = np.arccos(R[0, 0])
+        theta = math.atan2(R[1, 0], R[0, 0])
 
         # debug
         #for s in segments:
         #    (s * R + o).plot('r')
-        #for m in self.map:
+        #for m in map:
         #    m.plot('b')
         #plt.show()
 
-        return x, y, theta
+        return x, y, theta, np.linalg.norm(1/length * o_)
 
     def closest_point_line(self, line, p):
         """determines which point on the line is closest to the point p"""
@@ -172,4 +200,16 @@ class IterativeClosestLine:
         for i in range(outer_contour.shape[1]-1):
             map.append(Line(outer_contour[:, i], outer_contour[:, i+1]))
 
-        return map
+        # generate polygons that represent the inside and the outside of the racetrack
+        pgon_inside = geometry.Polygon([*zip(inner_contour[0, :], inner_contour[1, :])])
+        pgon_outside = geometry.Polygon([*zip(outer_contour[0, :], outer_contour[1, :])])
+
+        # store centers for the line segments of the map
+        cen = []
+
+        for m in map:
+            cen.append(np.resize(m.center(), (2, )))
+
+        cen = np.transpose(np.asarray(cen))
+
+        return map, pgon_inside, pgon_outside, cen

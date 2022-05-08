@@ -172,7 +172,7 @@ class ManeuverAutomaton:
 
                     # simulate the car
                     u = np.array([v, steer])
-                    x0 = np.array([0, 0, 0, v, 0, 0, 0])
+                    x0 = np.array([0, 0, 0, v_init, 0, 0, 0])
                     x = simulate(x0, u, t, self.params)
 
                     # construct the motion primitive

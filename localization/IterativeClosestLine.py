@@ -6,7 +6,9 @@ import alphashape
 import cv2
 import yaml
 from copy import deepcopy
+from shapely import geometry
 from auxiliary.ScanSimulator import ScanSimulator
+from auxiliary.free_space import linesegment_refinement
 
 class IterativeClosestLine:
     """class representing the iterative-closest-line algorithm for localization"""
@@ -40,34 +42,19 @@ class IterativeClosestLine:
         points = np.array([[0.0], [img.shape[1]]]) + np.transpose(points)
         points = points * my_dict['resolution']
 
-        # determine a path inside the racetrack
+        # determine centerline of the racetrack
         scanner = ScanSimulator(filepath, yamlpath)
         pose = np.array([x, y, theta])
-        orig = -np.asarray(my_dict['origin'][0:2]) #+ (np.asarray(img.shape) * my_dict['resolution'])/2
+        orig = -np.asarray(my_dict['origin'][0:2])
         line = [np.array([x, y]) + orig]
 
-        """plt.plot(points[0, :], points[1, :], '.r')
-        ranges = scanner.scan(pose)
-        ranges = ranges[135:-135]
-        for j in range(len(ranges)):
-            theta_ = deepcopy(theta - np.pi / 2 + np.pi / len(ranges) * j)
-            x_ = deepcopy(x + 0.9*ranges[j] * np.cos(theta_))
-            y_ = deepcopy(y + 0.9*ranges[j] * np.sin(theta_))
-            p_ = np.resize(deepcopy(np.array([x_, y_])) + orig, (2, 1))
-            plt.plot([orig[0], p_[0]], [orig[1], p_[1]], 'b')
-
-        plt.show()"""
-
-        for i in range(100):
+        for i in range(1000):
             ranges = scanner.scan(pose)
             ind = np.argmax(ranges)
             points_ = deepcopy(points - np.array([[x], [y]]) - np.resize(orig, (2, 1)))
             index = np.where(np.sum(points_**2, axis=0) < 25)
-            #plt.plot(points[0, :], points[1, :], '.r')
-            #plt.plot(points[0, index[0]], points[1, index[0]], '.g')
-            #plt.show()
             dist = -np.inf
-            for j in range(len(ranges)):
+            for j in np.arange(0, len(ranges), 20):
                 theta_ = deepcopy(theta - 2.35619449615 + 0.00436332309619 * j)
                 x_ = min(ranges[j], 1) * np.cos(theta_)
                 y_ = min(ranges[j], 1) * np.sin(theta_)
@@ -76,28 +63,44 @@ class IterativeClosestLine:
                     dist = dist_
                     ind = j
             theta = deepcopy(theta - 2.35619449615 + 0.00436332309619 * ind)
-            #tmp = np.dot(np.array([[np.sin(theta), -np.cos(theta)]]), points_)
-            #index = np.where(abs(tmp[0]) < 0.2)
-            #tmp = np.dot(np.array([[np.cos(theta), np.sin(theta)]]), points_[:, index[0]])
-            #index = np.where(tmp[0, :] > 0)
             x = deepcopy(x + min(ranges[ind], 1) * np.cos(theta))
             y = deepcopy(y + min(ranges[ind], 1) * np.sin(theta))
             p = deepcopy(np.array([x, y])) + orig
             line.append(p)
+            if i > 10 and np.sum((p - line[0])**2) <= 1:
+                break
             pose = np.array([x, y, theta])
 
         line = np.asarray(line)
 
-        # debug
-        #img = cv2.resize(img, dsize=(1000, 1000), interpolation=cv2.INTER_CUBIC)
+        # convert center-line to polygon
+        pgon = geometry.Polygon([*zip(line[:, 0], line[:, 1])])
 
-        #alpha = 0.95 * alphashape.optimizealpha(points)
-        #hull = alphashape.alphashape(points, 0.5)
-        #hull_pts = hull.exterior.coords.xy
+        # divide points into inside and outside boundary of the racetrack
+        inner = []
+        outer = []
+
+        for i in range(points.shape[1]):
+            if pgon.contains(geometry.Point(points[0, i], points[1, i])):
+                inner.append(i)
+            else:
+                outer.append(i)
+
+        # approximate inner boundary with a polygon
+        inner_contur = []
+
+        for i in range(line.shape[0]):
+            ind = np.argmin(np.sum((points[:, inner] - np.resize(line[i, :], (2, 1)))**2, axis=0))
+            inner_contur.append(points[:, inner[ind]])
+
+        inner_contur = np.asarray(inner_contur)
+        #test = linesegment_refinement(points[:, inner])
 
         plt.plot(points[0, :], points[1, :], '.r')
         plt.plot(line[:, 0], line[:, 1], 'b')
         plt.plot(line[:, 0], line[:, 1], '.g')
+        plt.plot(points[0, inner], points[1, inner], '.k')
+        plt.plot(inner_contur[:, 0], inner_contur[:, 1], 'm')
         #plt.plot(points[0, index], points[1, index], '.g')
         plt.show()
 

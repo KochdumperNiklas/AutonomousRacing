@@ -4,6 +4,7 @@ def simulate(x0, u, t, params):
     """simulate the car"""
 
     x = np.zeros((x0.shape[0], len(t)))
+    x[:, 0] = x0
 
     for i in range(len(t)-1):
         x[:, i+1] = x[:, i] + dynamic_function(x[:, i], u, params) * (t[i+1] - t[i])

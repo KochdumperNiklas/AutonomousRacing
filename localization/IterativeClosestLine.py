@@ -44,17 +44,21 @@ class IterativeClosestLine:
         u = np.array([speed, steer])
         t = np.array([0, 0.01])
         traj = simulate(x0, u, t, self.params)
-        self.x = traj[-1, 0] + np.random.uniform(-0.1, 0.1)
-        self.y = traj[-1, 1] + np.random.uniform(-0.1, 0.1)
-        self.theta = traj[-1, 4] + np.random.uniform(-0.05, 0.05)
+        self.x = traj[-1, 0] #+ np.random.uniform(-0.1, 0.1)
+        self.y = traj[-1, 1] #+ np.random.uniform(-0.1, 0.1)
+        self.theta = traj[-1, 4] #+ np.random.uniform(-0.05, 0.05)
 
         # convert the lidar data to line segments
         points = process_lidar_data(scans)
-        tmp = linesegment_refinement(points)
+        ind = np.where(scans < 30.00)
+        tmp = linesegment_refinement(points[:, ind[0]])
 
         segments = []
         for s in tmp:
-            segments.append(Line(s[:, [0]], s[:, [s.shape[1] - 1]]))
+            if s.shape[1] > 20:
+                l = Line(s[:, [0]], s[:, [s.shape[1] - 1]])
+                if min(np.sqrt(np.sum((s - l.center())**2, axis=0))) < 0.5:
+                    segments.append(l)
 
         # determine relevant map segments that have to be considered
         C = np.concatenate((np.identity(2), -np.identity(2)), axis=0)
@@ -69,10 +73,10 @@ class IterativeClosestLine:
 
         # update pose estimation with iterative closest line algorithm
         if len(map) > 0:
-            x1, y1, theta1, length_shift = self.iterative_closest_line(segments, map, self.x, self.y, self.theta)
+            x1, y1, theta1 = self.iterative_closest_line(segments, map, self.x, self.y, self.theta)
 
-            if length_shift < 1 and not self.pgon_inner.contains(geometry.Point(x1, y1)) and \
-                    self.pgon_outer.contains(geometry.Point(x1, y1)):
+            if np.sqrt((x1-self.x)**2 + (y1-self.y)**2) < 0.5 and abs(self.theta - theta1) < 0.5 and \
+            not self.pgon_inner.contains(geometry.Point(x1, y1)) and self.pgon_outer.contains(geometry.Point(x1, y1)):
                 self.x = x1
                 self.y = y1
                 self.theta = theta1
@@ -157,7 +161,7 @@ class IterativeClosestLine:
         #    m.plot('b')
         #plt.show()
 
-        return x, y, theta, np.linalg.norm(1/length * o_)
+        return x, y, theta
 
     def closest_point_line(self, line, p):
         """determines which point on the line is closest to the point p"""

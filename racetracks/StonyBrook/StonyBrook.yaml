@@ -1,6 +1,6 @@
 image: StonyBrook.png
-resolution: 0.004295
-origin: [-7.0,-6.5, 0.000000]
+resolution: 0.005
+origin: [-8.0,-7.5, 0.000000]
 negate: 0
 occupied_thresh: 0.45
 free_thresh: 0.196

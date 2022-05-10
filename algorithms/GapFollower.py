@@ -42,14 +42,14 @@ class GapFollower:
 
         # visualized the planned trajectory
         if self.settings['VISUALIZE']:
-            self.visualization(scans, proc_ranges, gap_start, gap_end, best, speed)
+            self.visualization(scans, scans[135:-135], gap_start, gap_end, best, speed)
 
         return np.array([speed, steering_angle])
 
     def preprocess_lidar(self, ranges):
         """preprocess the lidar scan array"""
 
-        self.radians_per_elem = (2 * np.pi) / len(ranges)
+        self.radians_per_elem = 0.00436332309619
 
         # don't use the lidar data from directly behind the car
         proc_ranges = np.array(ranges[135:-135])
@@ -106,9 +106,9 @@ class GapFollower:
         plt.cla()
         lidar_data = process_lidar_data(scans)
         plt.plot(lidar_data[0, :], lidar_data[1, :], '.r', label='lidar measurements')
-        phi1 = self.get_angle(gap_start, len(proc_ranges))
-        phi2 = self.get_angle(gap_end, len(proc_ranges))
-        phi3 = self.get_angle(best, len(proc_ranges))
+        phi1 = 2*self.get_angle(gap_start, len(proc_ranges))
+        phi2 = 2*self.get_angle(gap_end, len(proc_ranges))
+        phi3 = 2*self.get_angle(best, len(proc_ranges))
         x1 = np.array([proc_ranges[gap_start] * np.cos(phi1), proc_ranges[gap_start] * np.sin(phi1)])
         x2 = np.array([proc_ranges[gap_end-1] * np.cos(phi2), proc_ranges[gap_end-1] * np.sin(phi2)])
         x3 = np.array([speed * np.cos(phi3), speed * np.sin(phi3)])

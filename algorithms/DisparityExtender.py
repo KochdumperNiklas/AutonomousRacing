@@ -15,7 +15,7 @@ class DisparityExtender:
         """compute control inputs"""
 
         # preprocess LiDAR data
-        self.radians_per_point = (2 * np.pi) / len(scans)
+        self.radians_per_point = 0.00436332309619
         proc_ranges = self.preprocess_lidar(scans)
 
         # compute difference between adjacent points in the lidar data

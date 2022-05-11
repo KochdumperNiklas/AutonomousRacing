@@ -72,7 +72,7 @@ def vehicle_dynamics_ks(x, u_init, mu, C_Sf, C_Sr, lf, lr, h, m, I, s_min, s_max
          x[3]*np.sin(x[4]),
          u[0],
          u[1],
-         x[3]/lwb*np.tan(x[2])])#
+         x[3]/lwb*np.tan(x[2])])
 
     return f
 
@@ -88,7 +88,7 @@ def vehicle_dynamics_st(x, u_init, mu, C_Sf, C_Sr, lf, lr, h, m, I, s_min, s_max
                   v_switch, a_max, v_min, v_max)])
 
     # switch to kinematic model for small velocities
-    if abs(x[3]) < 0.5:
+    if abs(x[3]) < 1.5:
 
         lwb = lf + lr       # wheelbase
 
@@ -96,8 +96,7 @@ def vehicle_dynamics_st(x, u_init, mu, C_Sf, C_Sr, lf, lr, h, m, I, s_min, s_max
         x_ks = x[0:5]
         f_ks = vehicle_dynamics_ks(x_ks, u, mu, C_Sf, C_Sr, lf, lr, h, m, I, s_min, s_max, sv_min, sv_max, v_switch,
                                    a_max, v_min, v_max)
-        f = np.hstack((f_ks, np.array([u[1]/lwb*np.tan(x[2])+x[3]/(lwb*np.cos(x[2])**2)*u[0],
-        0])))
+        f = np.hstack((f_ks, np.array([u[1]/lwb*np.tan(x[2])+x[3]/(lwb*np.cos(x[2])**2)*u[0], 0])))
 
     else:
         f = np.array([x[3]*np.cos(x[6] + x[4]),

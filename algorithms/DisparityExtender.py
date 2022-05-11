@@ -90,7 +90,7 @@ class DisparityExtender:
         """determine steering angle for the selected point"""
 
         lidar_angle = (range_index - (range_len / 2)) * self.radians_per_point
-        steering_angle = np.clip(lidar_angle, np.radians(-90), np.radians(90))
+        steering_angle = np.clip(lidar_angle, np.radians(-90), np.radians(90)) * self.settings['STEER_CORRECTION']
 
         return steering_angle
 

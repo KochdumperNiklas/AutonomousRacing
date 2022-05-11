@@ -42,6 +42,7 @@ def car_parameter():
     # size of the car
     param['width'] = 0.31
     param['length'] = 0.58
+    param['lidar'] = 0.1
 
     return param
 

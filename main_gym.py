@@ -11,8 +11,8 @@ from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
 from algorithms.SwitchingDriver import SwitchingDriver
 
-CONTROLLER = ['SwitchingDriver']
-RACETRACK = 'SilverstoneObstacles'
+CONTROLLER = ['ManeuverAutomaton']
+RACETRACK = 'StonyBrook'
 VISUALIZE = False
 
 if __name__ == '__main__':
@@ -45,10 +45,12 @@ if __name__ == '__main__':
 
     # initialize the motion planner
     controller = []
+    params = env.params
+    params['lidar'] = 0.0
 
     for i in range(len(CONTROLLER)):
         settings = parse_settings(CONTROLLER[i], RACETRACK, VISUALIZE)
-        exec('tmp = ' + CONTROLLER[i] + '(env.params, settings)')
+        exec('tmp = ' + CONTROLLER[i] + '(params, settings)')
         controller.append(tmp)
 
     # initialize auxiliary variables

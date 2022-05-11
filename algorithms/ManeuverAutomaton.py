@@ -65,7 +65,7 @@ class ManeuverAutomaton:
         # transform lidar data into point cloud
         points = process_lidar_data(scans)
         ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
-        points = points[:, ind[0]]
+        points = points[:, ind[0]] - np.array([[self.params['lidar']], [0.0]])
 
         # get reference trajectory
         ref_traj = None

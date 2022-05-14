@@ -20,10 +20,15 @@ from auxiliary.free_space import linesegment_refinement
 class IterativeClosestLine:
     """class representing the iterative-closest-line algorithm for localization"""
 
-    def __init__(self, racetrack, x, y, theta, params):
+    def __init__(self, params, settings, x, y, theta):
         """object constructor"""
 
+        # store settings and parameters
+        self.settings = settings
+        self.params = params
+
         # load the map of the racetrack
+        racetrack = self.settings['RACETRACK']
         if racetrack.endswith('Obstacles'):
             racetrack = racetrack[:-9]
 
@@ -33,8 +38,6 @@ class IterativeClosestLine:
         self.x = x
         self.y = y
         self.theta = theta
-
-        self.params = params
 
     def localize(self, scans, v, speed, steer):
         """estimate the current pose from the lidar data and the control commands"""
@@ -50,14 +53,14 @@ class IterativeClosestLine:
 
         # convert the lidar data to line segments
         points = process_lidar_data(scans)
-        ind = np.where(scans < 30.00)
+        ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
         tmp = linesegment_refinement(points[:, ind[0]])
 
         segments = []
         for s in tmp:
-            if s.shape[1] > 20:
+            if s.shape[1] > self.settings['MIN_POINTS']:
                 l = Line(s[:, [0]], s[:, [s.shape[1] - 1]])
-                if min(np.sqrt(np.sum((s - l.center())**2, axis=0))) < 0.5:
+                if min(np.sqrt(np.sum((s - l.center())**2, axis=0))) < self.settings['EMPTY_DIST']:
                     segments.append(l)
 
         # determine relevant map segments that have to be considered
@@ -75,8 +78,10 @@ class IterativeClosestLine:
         if len(map) > 0:
             x1, y1, theta1 = self.iterative_closest_line(segments, map, self.x, self.y, self.theta)
 
-            if np.sqrt((x1-self.x)**2 + (y1-self.y)**2) < 0.5 and abs(self.theta - theta1) < 0.5 and \
-            not self.pgon_inner.contains(geometry.Point(x1, y1)) and self.pgon_outer.contains(geometry.Point(x1, y1)):
+            if np.sqrt((x1-self.x)**2 + (y1-self.y)**2) < self.settings['MAX_DIST_POSITION'] \
+                    and abs(self.theta - theta1) < self.settings['MAX_DIST_ORIENTATION'] \
+                    and not self.pgon_inner.contains(geometry.Point(x1, y1)) \
+                    and self.pgon_outer.contains(geometry.Point(x1, y1)):
                 self.x = x1
                 self.y = y1
                 self.theta = theta1

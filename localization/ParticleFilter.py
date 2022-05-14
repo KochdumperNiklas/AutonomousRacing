@@ -8,15 +8,12 @@ from auxiliary.vehicle_model import simulate
 class ParticleFilter:
     """class representing the particle filter algorithm for localization"""
 
-    def __init__(self, racetrack, x, y, theta, params):
+    def __init__(self, params, settings, x, y, theta):
         """object constructor"""
 
-        settings = dict()
-        settings['RACETRACK'] = racetrack
-        settings['PARTICLES'] = 100
-        settings['SIGMA_POSITION'] = 0.1
-        settings['SIGMA_ORIENTATION'] = 0.01
+        # store settings and parameters
         self.settings = settings
+        self.params = params
 
         # initialize scan simulator
         racetrack = settings['RACETRACK']
@@ -29,7 +26,6 @@ class ParticleFilter:
 
         # safe the initial pose of the car as well as the car parameter
         self.state = np.array([x, y, 0.0, 0.0, theta, 0.0, 0.0])
-        self.params = params
 
     def localize(self, scans, v, speed, steer):
         """estimate the current pose from the lidar data and the control commands"""
@@ -59,7 +55,6 @@ class ParticleFilter:
         for p in particles:
             expected_scan = self.scanner.scan(p[[0, 1, 4]])
             #plt.plot(expected_scan, 'b')
-            probability_ = np.sum(np.exp(-(expected_scan - scans)**2 / (2 * 60**2)))
             probability_ = -np.sum((expected_scan - scans)**2)
             if probability_ > probability:
                 probability = probability_

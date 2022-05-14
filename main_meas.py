@@ -8,12 +8,18 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
 from algorithms.SwitchingDriver import SwitchingDriver
+from auxiliary.process_lidar_data import process_lidar_data
+from auxiliary.vehicle_model import simulate
+from localization.IterativeClosestLine import IterativeClosestLine
+from localization.ParticleFilter import ParticleFilter
 
-MEASUREMENT = 'racetrack_1'
-CONTROLLER = 'DisparityExtender'
+MEASUREMENT = 'racetrack_6'
+CONTROLLER = 'GapFollower'
 RACETRACK = 'StonyBrook'
-
-
+OBSERVER = 'ParticleFilter'
+VISUALIZE = False
+#x0 = np.array([-6, -5, -0.15])
+x0 = np.array([-0.63, -0.3, -3.11])
 
 def car_parameter():
     """parameter for the car"""
@@ -44,6 +50,7 @@ def car_parameter():
     # size of the car
     param['width'] = 0.31
     param['length'] = 0.58
+    param['lidar'] = 0.1
 
     return param
 
@@ -72,9 +79,13 @@ if __name__ == '__main__':
     time_control = np.asarray(control['%time']) * 10**(-9)
 
     # initialize motion planner
-    settings = parse_settings(CONTROLLER, RACETRACK, True)
+    settings = parse_settings(CONTROLLER, RACETRACK, VISUALIZE)
     params = car_parameter()
     exec('controller = ' + CONTROLLER + '(params, settings)')
+
+    # initialize localization algorithm
+    settings = parse_settings(OBSERVER, RACETRACK, VISUALIZE)
+    exec('observer = ' + OBSERVER + '(params, settings, x0[0], x0[1], x0[2])')
 
     # initialization
     start_time = max(time_lidar[0], time_odom[0])
@@ -84,6 +95,7 @@ if __name__ == '__main__':
     speed = []
     steer = []
     time = []
+    traj_ = []
     t = 0
 
     # main control loop
@@ -98,8 +110,11 @@ if __name__ == '__main__':
         ind = ind[0]
         v = vel[ind[len(ind)-1]]
 
-        # visualized the planned trajectory
+        # visualize the planned trajectory
         speed_, steer_ = controller.plan(None, None, None, v, lidar_data)
+
+        x, y, theta = observer.localize(lidar_data, v, steer_, speed_)
+        traj_.append(np.array([x, y, theta]))
 
         # store data
         speed.append(speed_)
@@ -109,10 +124,20 @@ if __name__ == '__main__':
         # update time
         t += 0.01
 
+    # simulate the trajectory that the car drove
+    traj = [np.array([x0[0], x0[1], 0.0, 0.0, -3.5, 0.0, 0.0])]
+
+    for i in range(len(time_control)-1):
+        u = np.array([1*speed_real[i], 0.7*steer_real[i]])
+        tmp = simulate(traj[-1], u, np.array([0, time_control[i+1] - time_control[i]]), params)
+        traj.append(tmp[1])
+
     # compare actual and expected control commands
-    speed = np.asarray(speed)
+    """speed = np.asarray(speed)
     steer = np.asarray(steer)
     time = np.asarray(time)
+    traj = np.asarray(traj)
+    traj_ = np.asarray(traj_)
 
     plt.close()
     plt.plot(time, speed, label='speed (simulation)')
@@ -123,4 +148,12 @@ if __name__ == '__main__':
     plt.plot(time, steer, label='steer (simulation)')
     plt.plot(time_control, steer_real, label='steer (real)')
     plt.legend()
+    plt.show()"""
+
+    traj_ = np.asarray(traj_)
+    #plt.plot(traj[:, 0], traj[:, 1], 'r')
+    plt.plot(traj_[:, 0], traj_[:, 1], 'b')
+    #for m in observer.map:
+    #    m.plot('g')
     plt.show()
+    test = 1

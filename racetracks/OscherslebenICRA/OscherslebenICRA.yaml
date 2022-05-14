@@ -1,0 +1,6 @@
+image: OscherslebenICRA.png
+resolution: 0.01
+origin: [-20,-8.3, 0.000000]
+negate: 0
+occupied_thresh: 0.45
+free_thresh: 0.196

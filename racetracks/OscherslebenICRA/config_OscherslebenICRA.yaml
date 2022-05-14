@@ -1,0 +1,13 @@
+map_path: './racetracks/OscherslebenICRA/OscherslebenICRA'
+map_ext: '.png'
+
+# Start Positition Multi Vehicle Head to Head Race
+# Vehicle 1 (P1)
+sx: 0.0
+sy: 0.0
+stheta: 3.14
+
+# Vehicle 2 (P2)
+sx2: 0.9966514
+sy2: -0.8006893
+stheta2: 3.14

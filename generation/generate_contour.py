@@ -109,6 +109,19 @@ if __name__ == '__main__':
         ind = np.argmin(np.sum((points[:, inner] - np.resize(line[i, :], (2, 1))) ** 2, axis=0))
         inner_contour.append(points[:, inner[ind]])
 
+    accuracy = False
+
+    while not accuracy:
+        accuracy = True
+        for i in range(len(inner_contour)-1):
+            p = 0.5*(inner_contour[i] + inner_contour[i+1])
+            tmp = np.sum((points[:, inner] - np.resize(p, (2, 1))) ** 2, axis=0)
+            ind = np.argmin(tmp)
+            if tmp[ind] > 0.2 ** 2:
+                inner_contour.insert(i+1, points[:, inner[ind]])
+                accuracy = False
+                break
+
     inner_contour = np.asarray(inner_contour) - orig
 
     # approximate outer-boundary with a polygon
@@ -117,6 +130,19 @@ if __name__ == '__main__':
     for i in range(line.shape[0]):
         ind = np.argmin(np.sum((points[:, outer] - np.resize(line[i, :], (2, 1))) ** 2, axis=0))
         outer_contour.append(points[:, outer[ind]])
+
+    accuracy = False
+
+    while not accuracy:
+        accuracy = True
+        for i in range(len(outer_contour)-1):
+            p = 0.5*(outer_contour[i] + outer_contour[i+1])
+            tmp = np.sum((points[:, outer] - np.resize(p, (2, 1))) ** 2, axis=0)
+            ind = np.argmin(tmp)
+            if tmp[ind] > 0.2 ** 2:
+                outer_contour.insert(i+1, points[:, outer[ind]])
+                accuracy = False
+                break
 
     outer_contour = np.asarray(outer_contour) - orig
 

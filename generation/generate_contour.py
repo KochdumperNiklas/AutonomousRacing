@@ -1,6 +1,7 @@
 import os.path
 import numpy as np
 from matplotlib import image
+import matplotlib.pyplot as plt
 import yaml
 import sys
 from copy import deepcopy
@@ -8,7 +9,7 @@ from shapely import geometry
 sys.path.insert(1, '../')
 from auxiliary.ScanSimulator import ScanSimulator
 
-RACETRACK = 'StonyBrook'
+RACETRACK = 'OscherslebenICRA'
 
 if __name__ == '__main__':
     """generate inner- and outer-boundary of the racetrack and store them in a file"""
@@ -55,7 +56,7 @@ if __name__ == '__main__':
 
     n = len(indices[0])
     points = np.concatenate((np.resize(indices[1], (n, 1)), np.resize(-indices[0], (n, 1))), axis=1)
-    points = np.array([[0.0], [img.shape[1]]]) + np.transpose(points)
+    points = np.array([[0.0], [img.shape[0]]]) + np.transpose(points)
     points = points * resolution
 
     # determine centerline of the racetrack
@@ -66,11 +67,10 @@ if __name__ == '__main__':
 
     for i in range(1000):
         ranges = scanner.scan(pose)
-        ind = np.argmax(ranges)
         points_ = deepcopy(points - np.array([[x], [y]]) - np.resize(orig, (2, 1)))
         index = np.where(np.sum(points_ ** 2, axis=0) < 25)
         dist = -np.inf
-        for j in np.arange(0, len(ranges), 20):
+        for j in np.arange(135, len(ranges)-135, 10):
             theta_ = deepcopy(theta - 2.35619449615 + 0.00436332309619 * j)
             x_ = min(ranges[j], 1) * np.cos(theta_)
             y_ = min(ranges[j], 1) * np.sin(theta_)
@@ -126,3 +126,9 @@ if __name__ == '__main__':
 
     np.savetxt(path_inner, inner_contour, delimiter=",")
     np.savetxt(path_outer, outer_contour, delimiter=",")
+
+    # plot the resulting contours
+    plt.plot(points[0, :] - orig[0], points[1, :] - orig[1], '.g')
+    plt.plot(inner_contour[:, 0], inner_contour[:, 1], 'r')
+    plt.plot(outer_contour[:, 0], outer_contour[:, 1], 'r')
+    plt.show()

@@ -37,9 +37,9 @@ class ParticleFilter:
         traj = simulate(self.state, u, t, self.params)
 
         # generate particles
-        traj[-1, 0] = traj[-1, 0] + np.random.uniform(-0.1, 0.1)
-        traj[-1, 1] = traj[-1, 1] + np.random.uniform(-0.1, 0.1)
-        traj[-1, 4] = traj[-1, 4] + np.random.uniform(-0.1, 0.1)
+        traj[-1, 0] = traj[-1, 0]
+        traj[-1, 1] = traj[-1, 1]
+        traj[-1, 4] = traj[-1, 4]
         particles = [traj[-1, :]]
 
         for i in range(self.settings['PARTICLES']):
@@ -50,24 +50,17 @@ class ParticleFilter:
             particles.append(state_)
 
         # select the best particle
+        ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
         probability = -np.inf
 
         for p in particles:
             expected_scan = self.scanner.scan(p[[0, 1, 4]])
-            #plt.plot(expected_scan, 'b')
-            probability_ = -np.sum((expected_scan - scans)**2)
+            probability_ = -np.sum((expected_scan[ind[0]] - scans[ind[0]])**2)
             if probability_ > probability:
                 probability = probability_
                 best = deepcopy(p)
 
         # store the best pose
         self.state = best
-
-        # debug
-        """expected_scan = self.scanner.scan(best[[0, 1, 4]])
-        plt.plot(scans, 'r')
-        plt.plot(expected_scan, 'b')
-        plt.show()"""
-        #plt.show()
 
         return best[0], best[1], best[4]

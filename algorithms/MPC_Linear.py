@@ -5,7 +5,6 @@ from os.path import exists
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from scipy.io import savemat
-import largestinteriorrectangle as lir
 from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.Polytope import Polytope
 from auxiliary.Polygon import Polygon

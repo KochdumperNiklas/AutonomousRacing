@@ -1,5 +1,6 @@
 import rospy
 import numpy as np
+from sshkeyboard import listen_keyboard, stop_listening
 from auxiliary.parse_settings import parse_settings
 from algorithms.ManeuverAutomaton import ManeuverAutomaton
 from algorithms.MPC_Linear import MPC_Linear
@@ -11,7 +12,7 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 
 CONTROLLER = 'ManeuverAutomaton'
-RACETRACK = 'Oschersleben'
+RACETRACK = 'StonyBrook'
 
 def car_parameter():
     """parameter for the car"""
@@ -28,16 +29,16 @@ def car_parameter():
     param['I'] = 0.04712
 
     # steering constraints
-    param['s_min'] = -0.4189        # minimum steering angle[rad]
-    param['s_max'] = 0.4189         # maximum steering angle[rad]
-    param['sv_min'] = -3.2          # minimum steering velocity[rad / s]
-    param['sv_max'] = 3.2           # maximum steering velocity[rad / s]
+    param['s_min'] = -0.4189        # minimum steering angle [rad]
+    param['s_max'] = 0.4189         # maximum steering angle [rad]
+    param['sv_min'] = -3.2          # minimum steering velocity [rad / s]
+    param['sv_max'] = 3.2           # maximum steering velocity [rad / s]
 
     # longitudinal constraints
-    param['v_min'] = -5.0           # minimum velocity[m / s]
-    param['v_max'] = 20.0           # maximum velocity[m / s]
-    param['v_switch'] = 7.319       # switching velocity[m / s]
-    param['a_max'] = 9.51           # maximum absolute acceleration[m / s ^ 2]
+    param['v_min'] = -5.0           # minimum velocity [m / s]
+    param['v_max'] = 20.0           # maximum velocity [m / s]
+    param['v_switch'] = 7.319       # switching velocity [m / s]
+    param['a_max'] = 9.51           # maximum absolute acceleration [m / s ^ 2]
 
     # size of the car
     param['width'] = 0.31
@@ -63,8 +64,10 @@ class PublisherSubscriber:
         # store motion planner
         self.controller = controller
 
-        # initialize control input
+        # initialize control input and auxiliary variables
         self.u = np.array([0.0, 0.0])
+        self.run = False
+        self.init = True
 
         # wait until first measurement is obtained
         rate = rospy.Rate(1000)
@@ -75,6 +78,7 @@ class PublisherSubscriber:
         # start timers for control command publishing and re-planning
         self.timer1 = rospy.Timer(rospy.Duration(0.001), self.callback_timer1)
         self.timer2 = rospy.Timer(rospy.Duration(0.01), self.callback_timer2)
+        self.timer3 = rospy.Timer(rospy.Duration(0.001), self.callback_timer3)
         rospy.spin()
 
     def callback_lidar(self, msg):
@@ -91,8 +95,13 @@ class PublisherSubscriber:
         """publish the current control commands"""
 
         msg = AckermannDriveStamped()
-        msg.drive.speed = self.u[0]
-        msg.drive.steering_angle = self.u[1]
+
+        if self.run:   
+            msg.drive.speed = self.u[0]
+            msg.drive.steering_angle = 1.4*self.u[1]
+        else:
+            msg.drive.speed = 0.0
+            msg.drive.steering_angle = 0.0
 
         self.pub.publish(msg)
 
@@ -100,6 +109,24 @@ class PublisherSubscriber:
         """obtain new control commands from the controller"""
 
         self.u = self.controller.plan(None, None, None, self.velocity, self.lidar_data)
+
+    def callback_timer3(self, timer):
+        """start keyboard listener in new thread"""
+
+        if self.init:
+           listen_keyboard(on_press=self.key_press)
+           self.init = False
+
+    def key_press(self, key):
+        """detect keyboard commands"""
+
+        if key == "s":
+           self.run = True
+        elif key == "e":
+           self.run = False
+        elif key == "k":
+           stop_listening()
+
 
 def start_controller():
 
@@ -109,4 +136,4 @@ def start_controller():
     exec('controller = ' + CONTROLLER + '(params, settings)')
 
     # start control cycle
-    PublisherSubscriber(controller)
+    PublisherSubscriber(locals()['controller'])

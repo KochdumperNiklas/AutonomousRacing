@@ -84,7 +84,7 @@ class PublisherSubscriber:
     def callback_lidar(self, msg):
         """store lidar data"""
 
-        self.lidar_data = msg.ranges
+        self.lidar_data = np.asarray(msg.ranges)
 
     def callback_velocity(self, msg):
         """calculate absolute velocity from x- any y-components"""
@@ -98,7 +98,7 @@ class PublisherSubscriber:
 
         if self.run:   
             msg.drive.speed = self.u[0]
-            msg.drive.steering_angle = 1.4*self.u[1]
+            msg.drive.steering_angle = self.u[1]
         else:
             msg.drive.speed = 0.0
             msg.drive.steering_angle = 0.0

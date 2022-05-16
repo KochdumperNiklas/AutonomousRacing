@@ -2,6 +2,7 @@ import os.path
 import numpy as np
 from matplotlib import image
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
 import yaml
 import sys
 from copy import deepcopy
@@ -9,7 +10,7 @@ from shapely import geometry
 sys.path.insert(1, '../')
 from auxiliary.ScanSimulator import ScanSimulator
 
-RACETRACK = 'OscherslebenICRA'
+RACETRACK = 'StonyBrook'
 
 if __name__ == '__main__':
     """generate inner- and outer-boundary of the racetrack and store them in a file"""
@@ -146,15 +147,42 @@ if __name__ == '__main__':
 
     outer_contour = np.asarray(outer_contour) - orig
 
+    # refine centerline
+    line = line[1:-1, :]
+    line = np.concatenate((line, line[[0], :]), axis=0)
+    distance = np.cumsum(np.sqrt(np.sum(np.diff(line, axis=0) ** 2, axis=1)))
+    distance = np.insert(distance, 0, 0) / distance[-1]
+    interpolator = interp1d(distance, line, kind='quadratic', axis=0)
+    alpha = np.linspace(0, 1, 100)
+    line = interpolator(alpha)
+    line = line[:-1, :]
+
+    # compute width of the racetrack
+    width_right = []
+    width_left = []
+
+    for i in range(line.shape[0]):
+        width_right.append(np.sqrt(np.min(np.sum((points[:, outer] - np.resize(line[i, :], (2, 1))) ** 2, axis=0))))
+        width_left.append(np.sqrt(np.min(np.sum((points[:, inner] - np.resize(line[i, :], (2, 1))) ** 2, axis=0))))
+
+    width_right = 0.8*np.expand_dims(np.asarray(width_right), axis=1)
+    width_left = 0.8*np.expand_dims(np.asarray(width_left), axis=1)
+
+    line = line - np.resize(orig, (1, 2))
+    center = 10*np.concatenate((line, width_right, width_left), axis=1)
+
     # save contours in files
     path_inner = os.path.join(dirpath, 'racetracks', RACETRACK, 'contour_inner.csv')
     path_outer = os.path.join(dirpath, 'racetracks', RACETRACK, 'contour_outer.csv')
+    path_center = os.path.join(dirpath, 'racetracks', RACETRACK, 'centerline.csv')
 
     np.savetxt(path_inner, inner_contour, delimiter=",")
     np.savetxt(path_outer, outer_contour, delimiter=",")
+    np.savetxt(path_center, center, delimiter=",")
 
     # plot the resulting contours
     plt.plot(points[0, :] - orig[0], points[1, :] - orig[1], '.g')
     plt.plot(inner_contour[:, 0], inner_contour[:, 1], 'r')
     plt.plot(outer_contour[:, 0], outer_contour[:, 1], 'r')
+    plt.plot(line[:, 0], line[:, 1], 'b')
     plt.show()

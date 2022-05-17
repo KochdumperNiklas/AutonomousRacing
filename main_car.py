@@ -76,7 +76,7 @@ class PublisherSubscriber:
         if not observer is None:
             self.x = observer.state[0]
             self.y = observer.state[1]
-            self.theta = observer.theta[4]
+            self.theta = observer.state[4]
 
         # wait until first measurement is obtained
         rate = rospy.Rate(1000)

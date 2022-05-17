@@ -6,6 +6,8 @@ from algorithms.ManeuverAutomaton import ManeuverAutomaton
 from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
+from localization.ParticleFilter import ParticleFilter
+from localization.IterativeClosestLine import IterativeClosestLine
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
@@ -13,6 +15,8 @@ from geometry_msgs.msg import PoseStamped
 
 CONTROLLER = 'ManeuverAutomaton'
 RACETRACK = 'StonyBrook'
+OBSERVER = 'ParticleFilter'
+x0 = np.array([0, 0, -3.14])
 
 def car_parameter():
     """parameter for the car"""
@@ -50,7 +54,7 @@ def car_parameter():
 class PublisherSubscriber:
     """wrapper class that handles writing control commands and reading sensor measurements"""
 
-    def __init__(self, controller):
+    def __init__(self, controller, observer):
         """class constructor"""
 
         # publisher
@@ -61,13 +65,19 @@ class PublisherSubscriber:
         self.sub_lidar = rospy.Subscriber("/scan", LaserScan, self.callback_lidar)
         self.sub_velocity = rospy.Subscriber("/vesc/odom/", Odometry, self.callback_velocity)
 
-        # store motion planner
+        # store motion planner and observer
         self.controller = controller
+        self.observer = observer
 
         # initialize control input and auxiliary variables
         self.u = np.array([0.0, 0.0])
         self.run = False
         self.init = True
+
+        if not observer is None:
+            self.x = observer.x
+            self.y = observer.y
+            self.theta = observer.theta
 
         # wait until first measurement is obtained
         rate = rospy.Rate(1000)
@@ -79,6 +89,8 @@ class PublisherSubscriber:
         self.timer1 = rospy.Timer(rospy.Duration(0.001), self.callback_timer1)
         self.timer2 = rospy.Timer(rospy.Duration(0.01), self.callback_timer2)
         self.timer3 = rospy.Timer(rospy.Duration(0.001), self.callback_timer3)
+        if not observer is None:
+            self.timer4 = ropsy.Timer(rosyp.Duration(0.01), self.callback_timer4)
         rospy.spin()
 
     def callback_lidar(self, msg):
@@ -108,7 +120,10 @@ class PublisherSubscriber:
     def callback_timer2(self, timer):
         """obtain new control commands from the controller"""
 
-        self.u = self.controller.plan(None, None, None, self.velocity, self.lidar_data)
+        if self.observer is None:
+            self.u = self.controller.plan(None, None, None, self.velocity, self.lidar_data)
+        else:
+            self.u = self.controller.plan(self.x, self.y, self.theta, self.velocity, self.lidar_data)
 
     def callback_timer3(self, timer):
         """start keyboard listener in new thread"""
@@ -116,6 +131,11 @@ class PublisherSubscriber:
         if self.init:
            listen_keyboard(on_press=self.key_press)
            self.init = False
+
+    def callback_timer4(self, timer):
+        """update current position"""
+
+        self.x, self.y, self.theta = observer.localize(self.lidar_data, self.velocity, self.u[1], self.u[0])
 
     def key_press(self, key):
         """detect keyboard commands"""
@@ -135,5 +155,12 @@ def start_controller():
     settings = parse_settings(CONTROLLER, RACETRACK, False)
     exec('controller = ' + CONTROLLER + '(params, settings)')
 
+    # initialize the observer
+    if OBSERVER is None:
+        exec('observer = None')
+    else:
+        settings = parse_settings(OBSERVER, RACETRACK, False)
+        exec('observer = ' + OBSERVER + '(params, settings, x0[0], x0[1], x0[2])')
+
     # start control cycle
-    PublisherSubscriber(locals()['controller'])
+    PublisherSubscriber(locals()['controller'], locals()['observer'])

@@ -89,13 +89,13 @@ class PublisherSubscriber:
         self.timer2 = rospy.Timer(rospy.Duration(0.01), self.callback_timer2)
         self.timer3 = rospy.Timer(rospy.Duration(0.001), self.callback_timer3)
         if not observer is None:
-            self.timer4 = ropsy.Timer(rosyp.Duration(0.01), self.callback_timer4)
+            self.timer4 = rospy.Timer(rospy.Duration(0.01), self.callback_timer4)
         rospy.spin()
 
     def callback_lidar(self, msg):
         """store lidar data"""
 
-        self.lidar_data = np.asarray(msg.ranges)
+        self.lidar_data = np.asarray(msg.ranges)[0:1080]
 
     def callback_velocity(self, msg):
         """calculate absolute velocity from x- any y-components"""

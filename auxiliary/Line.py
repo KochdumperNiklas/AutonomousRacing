@@ -20,3 +20,10 @@ class Line:
 
     def plot(self, color):
         plt.plot(np.array([self.p1[0], self.p2[0]]), np.array([self.p1[1], self.p2[1]]), color)
+
+    def intersects(self, line):
+        tmp = np.linalg.solve(np.concatenate((self.d, line.d), axis=1), line.center() - self.center())
+        if abs(tmp[0]) < self.len/2 and abs(tmp[1]) < line.len/2:
+            return True, self.center() + self.d * tmp[0]
+        else:
+            return False, None

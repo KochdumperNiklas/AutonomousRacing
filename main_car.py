@@ -134,7 +134,7 @@ class PublisherSubscriber:
     def callback_timer4(self, timer):
         """update current position"""
 
-        self.x, self.y, self.theta = observer.localize(self.lidar_data, self.velocity, self.u[1], self.u[0])
+        self.x, self.y, self.theta = self.observer.localize(self.lidar_data, self.velocity, self.u[1], self.u[0])
 
     def key_press(self, key):
         """detect keyboard commands"""

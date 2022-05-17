@@ -7,7 +7,6 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
 from localization.ParticleFilter import ParticleFilter
-from localization.IterativeClosestLine import IterativeClosestLine
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped
 from nav_msgs.msg import Odometry
@@ -75,9 +74,9 @@ class PublisherSubscriber:
         self.init = True
 
         if not observer is None:
-            self.x = observer.x
-            self.y = observer.y
-            self.theta = observer.theta
+            self.x = observer.state[0]
+            self.y = observer.state[1]
+            self.theta = observer.theta[4]
 
         # wait until first measurement is obtained
         rate = rospy.Rate(1000)

@@ -9,6 +9,7 @@ from copy import deepcopy
 from shapely import geometry
 sys.path.insert(1, '../')
 from auxiliary.ScanSimulator import ScanSimulator
+from auxiliary.Line import Line
 
 RACETRACK = 'StonyBrook'
 
@@ -155,21 +156,76 @@ if __name__ == '__main__':
     interpolator = interp1d(distance, line, kind='quadratic', axis=0)
     alpha = np.linspace(0, 1, 100)
     line = interpolator(alpha)
-    line = line[:-1, :]
 
     # compute width of the racetrack
+    lines_outer = [Line(outer_contour[[0], :].T, outer_contour[[outer_contour.shape[0]-1], :].T)]
+    lines_inner = [Line(inner_contour[[0], :].T, inner_contour[[inner_contour.shape[0]-1], :].T)]
+
+    for i in range(outer_contour.shape[0] - 1):
+        lines_outer.append(Line(outer_contour[[i], :].T, outer_contour[[i+1], :].T))
+
+    for i in range(inner_contour.shape[0] - 1):
+        lines_inner.append(Line(inner_contour[[i], :].T, inner_contour[[i+1], :].T))
+
     width_right = []
     width_left = []
 
-    for i in range(line.shape[0]):
-        width_right.append(np.sqrt(np.min(np.sum((points[:, outer] - np.resize(line[i, :], (2, 1))) ** 2, axis=0))))
-        width_left.append(np.sqrt(np.min(np.sum((points[:, inner] - np.resize(line[i, :], (2, 1))) ** 2, axis=0))))
+    rad = np.sqrt(np.max(np.sum(outer_contour**2, axis=1)))
+    line = np.concatenate((line[[-1], :], line), axis=0) - np.resize(orig, (1, 2))
+    lines_outer.append(lines_outer[0])
+    lines_inner.append(lines_inner[0])
 
-    width_right = 0.8*np.expand_dims(np.asarray(width_right), axis=1)
-    width_left = 0.8*np.expand_dims(np.asarray(width_left), axis=1)
+    for i in range(1, line.shape[0] - 1):
+        d = line[i+1, :] - line[i-1, :]
+        d = np.array([[d[1]], [-d[0]]]) / np.linalg.norm(d) * rad
+        l = Line(line[[i], :].T - d, line[[i], :].T + d)
+        length = np.inf
+        for l_ in lines_outer:
+            flag, p = l.intersects(l_)
+            if flag:
+                """for t in lines_outer:
+                    t.plot('r')
+                plt.plot(line[:, 0], line[:, 1], 'g')
+                plt.plot(line[i, 0], line[i, 1], '.r')
+                l.plot('b')
+                plt.plot(p[0], p[1], '.g')
+                plt.show()"""
+                length_ = np.linalg.norm(p - line[[i], :].T)
+                if length_ < length:
+                    length = length_
+                    p_ = deepcopy(p)
+        del lines_outer[-1]
+        lines_outer.append(Line(line[[i], :].T, p_))
+        width_right.append(length)
 
-    line = line - np.resize(orig, (1, 2))
-    center = 10*np.concatenate((line, width_right, width_left), axis=1)
+    for i in range(1, line.shape[0] - 1):
+        d = line[i+1, :] - line[i-1, :]
+        d = np.array([[d[1]], [-d[0]]]) / np.linalg.norm(d) * rad
+        l = Line(line[[i], :].T - d, line[[i], :].T + d)
+        length = np.inf
+        for l_ in lines_inner:
+            flag, p = l.intersects(l_)
+            if flag:
+                """for t in lines_inner:
+                    t.plot('r')
+                plt.plot(line[:, 0], line[:, 1], 'g')
+                plt.plot(line[i, 0], line[i, 1], '.r')
+                l.plot('b')
+                plt.plot(p[0], p[1], '.g')
+                plt.show()"""
+                length_ = np.linalg.norm(p - line[[i], :].T)
+                if length_ < length:
+                    length = length_
+                    p_ = deepcopy(p)
+        del lines_inner[-1]
+        lines_inner.append(Line(line[[i], :].T, p_))
+        width_left.append(length)
+
+    width_right = np.expand_dims(np.asarray(width_right), axis=1)
+    width_left = np.expand_dims(np.asarray(width_left), axis=1)
+
+    line = line[1:-1, :]
+    center = 10*np.concatenate((line, width_left, width_right), axis=1)
 
     # save contours in files
     path_inner = os.path.join(dirpath, 'racetracks', RACETRACK, 'contour_inner.csv')

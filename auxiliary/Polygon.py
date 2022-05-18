@@ -55,6 +55,12 @@ class Polygon:
         v = np.transpose(self.vertices)
         return np.max(np.dot(dir, v))
 
+    def contains(self, p):
+        """check if the polygon contains a point"""
+
+        pgon = geometry.Polygon([*zip(self.vertices[:, 0], self.vertices[:, 1])])
+        return pgon.contains(geometry.Point(p[0], p[1]))
+
     def plot(self, color):
         """plot the polygon"""
 

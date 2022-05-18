@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from auxiliary.process_lidar_data import process_lidar_data
+from auxiliary.FakeMapSimulator import FakeMapSimulator
 
 class GapFollower:
     """class representing the gap follower motion planner"""
@@ -8,12 +9,23 @@ class GapFollower:
     def __init__(self, params, settings):
         """class constructor"""
 
+        # store algorithm settings
         settings['STRAIGHTS_STEERING_ANGLE'] = np.deg2rad(settings['STRAIGHTS_STEERING_ANGLE'])
         self.settings = settings
         self.radians_per_elem = None
 
+        # initialize fake map for lidar scan simulation
+        if settings['FAKE_MAP'] == "":
+            self.fake_map_simulator = None
+        else:
+            self.fake_map_simulator = FakeMapSimulator(settings['FAKE_MAP'])
+
     def plan(self, x, y, theta, v, scans):
         """compute control inputs"""
+
+        # potentially get LiDAR scan from fake map
+        if not self.fake_map_simulator is None:
+            scans = self.fake_map_simulator.get_scan(x, y, theta, scans)
 
         # eliminate all points inside 'bubble' (set them to zero)
         proc_ranges = self.preprocess_lidar(scans)
@@ -105,6 +117,8 @@ class GapFollower:
 
         plt.cla()
         lidar_data = process_lidar_data(scans)
+        ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
+        lidar_data = lidar_data[:, ind[0]]
         plt.plot(lidar_data[0, :], lidar_data[1, :], '.r', label='lidar measurements')
         phi1 = 2*self.get_angle(gap_start, len(proc_ranges))
         phi2 = 2*self.get_angle(gap_end, len(proc_ranges))

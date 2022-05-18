@@ -11,7 +11,8 @@ sys.path.insert(1, '../')
 from auxiliary.ScanSimulator import ScanSimulator
 from auxiliary.Line import Line
 
-RACETRACK = 'StonyBrook'
+RACETRACK = 'OscherslebenICRA'
+POINTS = 100
 
 if __name__ == '__main__':
     """generate inner- and outer-boundary of the racetrack and store them in a file"""
@@ -150,11 +151,14 @@ if __name__ == '__main__':
 
     # refine centerline
     line = line[1:-1, :]
+    c = np.array([[np.cos(data['stheta']), np.sin(data['stheta'])]])
+    if np.min(np.dot(c, line[1:5, :].T)) < np.dot(c, line[[0], :].T):
+        line = np.flipud(line)
     line = np.concatenate((line, line[[0], :]), axis=0)
     distance = np.cumsum(np.sqrt(np.sum(np.diff(line, axis=0) ** 2, axis=1)))
     distance = np.insert(distance, 0, 0) / distance[-1]
     interpolator = interp1d(distance, line, kind='quadratic', axis=0)
-    alpha = np.linspace(0, 1, 100)
+    alpha = np.linspace(0, 1, POINTS)
     line = interpolator(alpha)
 
     # compute width of the racetrack
@@ -194,7 +198,7 @@ if __name__ == '__main__':
                 if length_ < length:
                     length = length_
                     p_ = deepcopy(p)
-        del lines_outer[-1]
+        #del lines_outer[-1]
         lines_outer.append(Line(line[[i], :].T, p_))
         width_right.append(length)
 
@@ -217,7 +221,7 @@ if __name__ == '__main__':
                 if length_ < length:
                     length = length_
                     p_ = deepcopy(p)
-        del lines_inner[-1]
+        #del lines_inner[-1]
         lines_inner.append(Line(line[[i], :].T, p_))
         width_left.append(length)
 
@@ -225,7 +229,7 @@ if __name__ == '__main__':
     width_left = np.expand_dims(np.asarray(width_left), axis=1)
 
     line = line[1:-1, :]
-    center = 10*np.concatenate((line, width_left, width_right), axis=1)
+    center = 10*np.concatenate((line, width_right, width_left), axis=1)
 
     # save contours in files
     path_inner = os.path.join(dirpath, 'racetracks', RACETRACK, 'contour_inner.csv')
@@ -241,4 +245,16 @@ if __name__ == '__main__':
     plt.plot(inner_contour[:, 0], inner_contour[:, 1], 'r')
     plt.plot(outer_contour[:, 0], outer_contour[:, 1], 'r')
     plt.plot(line[:, 0], line[:, 1], 'b')
+    plt.show()
+
+    # plot the centerline and racetrack width
+    tmp = np.concatenate((line[[-1], :], line, line[[0], :]), axis=0)
+    for i in range(1, tmp.shape[0]-1):
+        d = tmp[i + 1, :] - tmp[i - 1, :]
+        d = np.array([[d[1]], [-d[0]]]) / np.linalg.norm(d)
+        l = Line(tmp[[i], :].T - width_left[i-1]*d, tmp[[i], :].T + width_right[i-1]*d)
+        l.plot('r')
+    plt.plot(line[:, 0], line[:, 1], 'k')
+    plt.plot(inner_contour[:, 0], inner_contour[:, 1], 'b')
+    plt.plot(outer_contour[:, 0], outer_contour[:, 1], 'b')
     plt.show()

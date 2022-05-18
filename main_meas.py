@@ -8,18 +8,19 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
 from algorithms.SwitchingDriver import SwitchingDriver
+from algorithms.PurePersuit import PurePersuit
 from auxiliary.process_lidar_data import process_lidar_data
 from auxiliary.vehicle_model import simulate
 from localization.IterativeClosestLine import IterativeClosestLine
 from localization.ParticleFilter import ParticleFilter
 
-MEASUREMENT = 'racetrack_6'
-CONTROLLER = 'GapFollower'
+MEASUREMENT = 'racetrack_8'
+CONTROLLER = 'MPC_Linear'
 RACETRACK = 'StonyBrook'
 OBSERVER = 'ParticleFilter'
-VISUALIZE = False
-#x0 = np.array([-6, -5, -0.15])
-x0 = np.array([-0.63, -0.3, -3.11])
+VISUALIZE = True
+#x0 = np.array([-0.63, -0.3, -3.11])
+x0 = np.array([0, 0, -3.14])
 
 def car_parameter():
     """parameter for the car"""
@@ -94,6 +95,8 @@ if __name__ == '__main__':
     time_control = time_control - start_time
     speed = []
     steer = []
+    speed_ = 0.0
+    steer_ = 0.0
     time = []
     traj_ = []
     t = 0
@@ -110,15 +113,16 @@ if __name__ == '__main__':
         ind = ind[0]
         v = vel[ind[len(ind)-1]]
 
-        # visualize the planned trajectory
-        speed_, steer_ = controller.plan(None, None, None, v, lidar_data)
-
+        # update position estimate
         x, y, theta = observer.localize(lidar_data, v, steer_, speed_)
-        traj_.append(np.array([x, y, theta]))
+
+        # visualize the planned trajectory
+        speed_, steer_ = controller.plan(x, y, theta, v, lidar_data)
 
         # store data
         speed.append(speed_)
         steer.append(steer_)
+        traj_.append(np.array([x, y, theta]))
         time.append(t)
 
         # update time
@@ -133,7 +137,7 @@ if __name__ == '__main__':
         traj.append(tmp[1])
 
     # compare actual and expected control commands
-    """speed = np.asarray(speed)
+    speed = np.asarray(speed)
     steer = np.asarray(steer)
     time = np.asarray(time)
     traj = np.asarray(traj)
@@ -148,12 +152,10 @@ if __name__ == '__main__':
     plt.plot(time, steer, label='steer (simulation)')
     plt.plot(time_control, steer_real, label='steer (real)')
     plt.legend()
-    plt.show()"""
-
-    traj_ = np.asarray(traj_)
-    #plt.plot(traj[:, 0], traj[:, 1], 'r')
-    plt.plot(traj_[:, 0], traj_[:, 1], 'b')
-    #for m in observer.map:
-    #    m.plot('g')
     plt.show()
-    test = 1
+
+    observer = IterativeClosestLine(params, settings, x0[0], x0[1], x0[2])
+    plt.plot(traj_[:, 0], traj_[:, 1], 'b')
+    for m in observer.map:
+        m.plot('g')
+    plt.show()

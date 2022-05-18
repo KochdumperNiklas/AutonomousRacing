@@ -6,6 +6,7 @@ from algorithms.ManeuverAutomaton import ManeuverAutomaton
 from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
+from algorithms.PurePersuit import PurePersuit
 from localization.ParticleFilter import ParticleFilter
 from sensor_msgs.msg import LaserScan
 from ackermann_msgs.msg import AckermannDriveStamped

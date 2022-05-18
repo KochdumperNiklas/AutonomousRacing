@@ -10,9 +10,10 @@ from algorithms.MPC_Linear import MPC_Linear
 from algorithms.GapFollower import GapFollower
 from algorithms.DisparityExtender import DisparityExtender
 from algorithms.SwitchingDriver import SwitchingDriver
+from algorithms.PurePersuit import PurePersuit
 
-CONTROLLER = ['ManeuverAutomaton']
-RACETRACK = 'StonyBrook'
+CONTROLLER = ['PurePersuit']
+RACETRACK = 'Spielberg'
 VISUALIZE = False
 
 if __name__ == '__main__':
@@ -22,7 +23,8 @@ if __name__ == '__main__':
         raise Exception('At most two motion planners are supported for head-to-head racing!')
 
     for s in CONTROLLER:
-        if s not in ['ManeuverAutomaton', 'MPC_Linear', 'GapFollower', 'DisparityExtender', 'SwitchingDriver']:
+        if s not in ['ManeuverAutomaton', 'MPC_Linear', 'GapFollower', 'DisparityExtender', 'SwitchingDriver',
+                     'PurePersuit']:
             raise Exception('Specified controller not available!')
 
     if len(CONTROLLER) > 1 and VISUALIZE:

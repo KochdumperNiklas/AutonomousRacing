@@ -2,6 +2,7 @@ import os.path
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 from auxiliary.ScanSimulator import ScanSimulator
 from auxiliary.vehicle_model import simulate
 
@@ -24,17 +25,18 @@ class ParticleFilter:
         yaml_path = os.path.join(parent, 'racetracks', racetrack, racetrack + '.yaml')
         self.scanner = ScanSimulator(map_path, yaml_path)
 
-        # safe the initial pose of the car as well as the car parameter
-        self.state = np.array([x, y, 0.0, 0.0, theta, 0.0, 0.0])
+        # safe the initial pose of the car
+        self.state = [np.array([x, y, 0.0, 0.0, theta, 0.0, 0.0])]
 
     def localize(self, scans, v, speed, steer):
         """estimate the current pose from the lidar data and the control commands"""
 
         # estimate pose by simulating the vehicle model
-        self.state[3] = v
+        state = self.state[0]
+        state[3] = v
         u = np.array([speed, steer])
         t = np.array([0, 0.01])
-        traj = simulate(self.state, u, t, self.params)
+        traj = simulate(state, u, t, self.params)
 
         # generate particles
         traj[-1, 0] = traj[-1, 0]
@@ -61,6 +63,21 @@ class ParticleFilter:
                 best = deepcopy(p)
 
         # store the best pose
-        self.state = best
+        self.state.insert(0, deepcopy(best))
 
-        return best[0], best[1], best[4]
+        if len(self.state) > self.settings['LENGTH_SMOOTHING']:
+            self.state.pop()
+
+        # smoothen the estimation
+        if len(self.state) > 1:
+            tmp = np.asarray(self.state)
+            val = np.expand_dims(np.arange(0, len(self.state)), axis=1)
+            x = LinearRegression().fit(val, tmp[:, [0]]).predict([[0]])[0][0]
+            y = LinearRegression().fit(val, tmp[:, [1]]).predict([[0]])[0][0]
+            theta = LinearRegression().fit(val, tmp[:, [4]]).predict([[0]])[0][0]
+        else:
+            x = best[0]
+            y = best[1]
+            theta = best[4]
+
+        return x, y, theta

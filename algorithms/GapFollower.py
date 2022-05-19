@@ -25,7 +25,9 @@ class GapFollower:
 
         # potentially get LiDAR scan from fake map
         if not self.fake_map_simulator is None:
-            scans = self.fake_map_simulator.get_scan(x, y, theta, scans)
+            tmp = self.fake_map_simulator.get_scan(x, y, theta, scans)
+            if max(tmp) > 0:
+                scans = tmp
 
         # eliminate all points inside 'bubble' (set them to zero)
         proc_ranges = self.preprocess_lidar(scans)

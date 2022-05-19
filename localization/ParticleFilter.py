@@ -52,11 +52,13 @@ class ParticleFilter:
             particles.append(state_)
 
         # select the best particle
+        scans = scans[self.settings['LIDAR_RANGE']:-self.settings['LIDAR_RANGE']]
         ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
         probability = -np.inf
 
         for p in particles:
             expected_scan = self.scanner.scan(p[[0, 1, 4]])
+            expected_scan = expected_scan[self.settings['LIDAR_RANGE']:-self.settings['LIDAR_RANGE']]
             probability_ = -np.sum((expected_scan[ind[0]] - scans[ind[0]])**2)
             if probability_ > probability:
                 probability = probability_

@@ -117,14 +117,13 @@ class ManeuverAutomaton:
                 for i in ind[0]:
 
                     # update occupancy set
-                    mp = deepcopy(self.motion_primitives[i])
-                    occ_set = deepcopy(mp.occupancy_set)
-                    occ_set.transform(node.x)
+                    mp = self.motion_primitives[i]
+                    occ_set = mp.occupancy_set.transform(node.x)
 
                     # collision checking
                     if not occ_set.intersects(points):
 
-                        mp = deepcopy(self.motion_primitives[i])
+                        mp = self.motion_primitives[i]
                         x_ = deepcopy(transform_state(mp.xEnd, deepcopy(node.x)))
                         cost_ = node.cost + self.cost_function(x_, ref_traj, points) - 100*len(node.ind)
                         ind_ = deepcopy(node.ind)
@@ -260,8 +259,7 @@ def plot_trajectory(list_mp, ind, color):
     for i in ind:
 
         # translate the occupancy set to the current state x
-        occ_set = deepcopy(list_mp[i].occupancy_set)
-        occ_set.transform(x)
+        occ_set = list_mp[i].occupancy_set.transform(x)
 
         # plot the occupancy set
         occ_set.plot(color)
@@ -351,15 +349,19 @@ class OccupancySet:
     def transform(self, x):
     # move the occupancy set to a different state x
 
+        polytopes = []
+
         p = x[0:2]              # x- and y-position
         phi = x[4]              # orientation
 
         # loop over all polytopes
         for i in range(0, len(self.polytopes)):
-            poly = self.polytopes[i]
+            poly = Polytope(self.polytopes[i].c, self.polytopes[i].d)
             poly.rotate(phi)
             poly.shift(p)
-            self.polytopes[i] = poly
+            polytopes.append(poly)
+
+        return OccupancySet(polytopes)
 
     def plot(self, color):
     # plot the occupancy set

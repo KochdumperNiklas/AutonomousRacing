@@ -10,13 +10,13 @@ class DisparityExtender:
 
         self.params = params
         self.settings = settings
+        self.radians_per_point = 0.00436332309619
 
     def plan(self, x, y, theta, v, scans):
         """compute control inputs"""
 
-        # preprocess LiDAR data
-        self.radians_per_point = 0.00436332309619
-        proc_ranges = self.preprocess_lidar(scans)
+        # remove LiDAR measurements behind the car
+        proc_ranges = np.array(scans[self.settings['LIDAR_RANGE']:-self.settings['LIDAR_RANGE']])
 
         # compute difference between adjacent points in the lidar data
         differences = self.get_differences(proc_ranges)
@@ -34,14 +34,6 @@ class DisparityExtender:
             self.visualization(scans, proc_ranges, proc_ranges.argmax(), speed, disparities)
 
         return speed, steering_angle
-
-    def preprocess_lidar(self, ranges):
-        """preprocess the lidar scan array"""
-
-        # remove quadrant of LiDAR directly behind the car
-        eighth = int(len(ranges) / 8)
-
-        return np.array(ranges[eighth:-eighth])
 
     def get_differences(self, ranges):
         """compute the absolute difference between adjacent elements in the LiDAR data"""

@@ -138,7 +138,7 @@ class Observer:
         """class constructor"""
 
         # publisher
-        self.pub = rospy.Publisher("observer", Float32MultiArray, queue_size=1)
+        self.pub = rospy.Publisher("observer", Float32MultiArray, queue_size=1, latch=True)
 
         # subscribers
         self.sub_lidar = rospy.Subscriber("/scan", LaserScan, self.callback_lidar)
@@ -161,8 +161,7 @@ class Observer:
             rate.sleep()
 
         # start timers for control command publishing and re-planning
-        self.timer1 = rospy.Timer(rospy.Duration(0.001), self.callback_timer1)
-        self.timer2 = rospy.Timer(rospy.Duration(0.01), self.callback_timer2)
+        self.timer = rospy.Timer(rospy.Duration(0.01), self.callback_timer)
 
         rospy.spin()
 
@@ -181,18 +180,15 @@ class Observer:
 
         self.u = np.array([msg.drive.speed, msg.drive.steering_angle])
 
-    def callback_timer1(self, timer):
-        """publish the current pose estimate"""
+    def callback_timer(self, timer):
+        """update pose estimate"""
+
+        self.x, self.y, self.theta = self.observer.localize(self.lidar_data, self.velocity, self.u[1], self.u[0])
 
         msg = Float32MultiArray()
         msg.data = [self.x, self.y, self.theta]
 
         self.pub.publish(msg)
-
-    def callback_timer2(self, timer):
-        """update pose estimate"""
-
-        self.x, self.y, self.theta = self.observer.localize(self.lidar_data, self.velocity, self.u[1], self.u[0])
 
 
 class Keyboard:

@@ -56,7 +56,7 @@ class GapFollower:
 
         # visualized the planned trajectory
         if self.settings['VISUALIZE']:
-            self.visualization(scans, scans[135:-135], gap_start, gap_end, best, speed)
+            self.visualization(scans, gap_start, gap_end, best, speed)
 
         return np.array([speed, steering_angle])
 
@@ -66,7 +66,7 @@ class GapFollower:
         self.radians_per_elem = 0.00436332309619
 
         # don't use the lidar data from directly behind the car
-        proc_ranges = np.array(ranges[135:-135])
+        proc_ranges = np.array(ranges[self.settings['LIDAR_RANGE']:-self.settings['LIDAR_RANGE']])
 
         # sets each value to the mean over a given window
         proc_ranges = np.convolve(proc_ranges,
@@ -114,13 +114,14 @@ class GapFollower:
 
         return steering_angle
 
-    def visualization(self, scans, proc_ranges, gap_start, gap_end, best, speed):
+    def visualization(self, scans, gap_start, gap_end, best, speed):
         """visualize the planned trajectory"""
 
         plt.cla()
         lidar_data = process_lidar_data(scans)
         ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
         lidar_data = lidar_data[:, ind[0]]
+        proc_ranges = scans[self.settings['LIDAR_RANGE']:-self.settings['LIDAR_RANGE']]
         plt.plot(lidar_data[0, :], lidar_data[1, :], '.r', label='lidar measurements')
         phi1 = 2*self.get_angle(gap_start, len(proc_ranges))
         phi2 = 2*self.get_angle(gap_end, len(proc_ranges))

@@ -82,13 +82,16 @@ class ManeuverAutomaton:
 
         # initialize queue
         queue = []
+        cost_ = np.inf
         ind = np.argmin(np.abs(np.asarray(self.settings['vel_init']) - v))
 
         for i in self.indices[ind]:
             mp = self.motion_primitives[i]
+            cost = self.cost_function(mp.xEnd, ref_traj, points)
             if not mp.occupancy_set.intersects(points):
-                cost = self.cost_function(mp.xEnd, ref_traj, points)
                 queue.append(Node(mp.xEnd, [i], cost))
+            elif cost < cost_:
+                least = Node(mp.xEnd, [i], cost)
 
         # loop until the queue is empty
         cost = np.Infinity
@@ -132,11 +135,10 @@ class ManeuverAutomaton:
 
         # return control input for the best trajectory
         if not best:
-            u = self.u_prev
-            print('Failed to find a feasible solution!')
-        else:
-            u = self.motion_primitives[best.ind[0]].u
-            self.u_prev = u
+            best = least
+
+        u = self.motion_primitives[best.ind[0]].u
+        self.u_prev = u
 
         # visualize the planned trajectory
         if self.settings['VISUALIZE']:

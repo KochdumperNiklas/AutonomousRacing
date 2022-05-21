@@ -346,7 +346,12 @@ class OccupancySet:
 
     def intersects(self, p):
     # check if the occupancy set intersect a point cloud p
-        return np.any([poly.intersects(p) for poly in self.polytopes])
+
+        for poly in self.polytopes:
+            if poly.intersects(p):
+                return True
+
+        return False
 
     def transform(self, x):
     # move the occupancy set to a different state x

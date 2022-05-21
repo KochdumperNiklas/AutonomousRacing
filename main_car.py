@@ -15,8 +15,8 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Float32MultiArray, Bool
 
-CONTROLLER = 'ManeuverAutomaton'
-RACETRACK = 'StonyBrook'
+CONTROLLER = 'GapFollower'
+RACETRACK = 'OscherslebenICRA'
 OBSERVER = 'ParticleFilter'
 x0 = np.array([0, 0, -3.14])
 

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from auxiliary.process_lidar_data import process_lidar_data
+from auxiliary.adaptive_cruise_control import adaptive_cruise_control
 from auxiliary.raceline import *
 
 class PurePersuit:
@@ -11,6 +12,7 @@ class PurePersuit:
 
         # store algorithm settings
         self.settings = settings
+        self.params = params
 
         # load optimal raceline
         self.raceline = load_raceline(settings['path_raceline'])
@@ -30,6 +32,9 @@ class PurePersuit:
         # compute control commands
         speed, steering_angle = self.get_actuation(x, y, theta, lookahead_point)
         speed = self.settings['VELOCITY_GAIN'] * speed
+
+        if self.settings['ADAPTIVE_CRUISE_CONTROL']:
+            speed = adaptive_cruise_control(scans, speed, self.params['width'])
 
         # visualized planned motion
         if self.settings['VISUALIZE']:

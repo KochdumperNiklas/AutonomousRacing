@@ -26,8 +26,14 @@ class DisparityExtender:
 
         proc_ranges = self.extend_disparities(disparities, proc_ranges,
                                               self.params['width'], self.settings['SAFETY_PERCENTAGE'])
+
+        # compute control commands
         steering_angle = self.get_steering_angle(proc_ranges.argmax(), len(proc_ranges))
-        speed = self.settings['SPEED']
+
+        if abs(steering_angle) > self.settings['STRAIGHTS_STEERING_ANGLE']:
+            speed = self.settings['CORNERS_SPEED']
+        else:
+            speed = self.settings['STRAIGHTS_SPEED']
 
         # visualize the planned trajectory
         if self.settings['VISUALIZE']:

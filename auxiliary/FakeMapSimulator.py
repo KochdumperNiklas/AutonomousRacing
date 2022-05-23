@@ -21,9 +21,12 @@ class FakeMapSimulator:
         p = np.array([[x], [y]])
         active = False
 
-        for pos in self.positions:
-            if pos.contains(p):
-                active = True
+        if self.positions is None:
+            active = True
+        else:
+            for pos in self.positions:
+                if pos.contains(p):
+                    active = True
 
         # generate the fake scan
         if active:

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from auxiliary.process_lidar_data import process_lidar_data
+from auxiliary.adaptive_cruise_control import adaptive_cruise_control
 from auxiliary.FakeMapSimulator import FakeMapSimulator
 
 class GapFollower:
@@ -9,9 +10,10 @@ class GapFollower:
     def __init__(self, params, settings):
         """class constructor"""
 
-        # store algorithm settings
+        # store algorithm settings and car parameter
         settings['STRAIGHTS_STEERING_ANGLE'] = np.deg2rad(settings['STRAIGHTS_STEERING_ANGLE'])
         self.settings = settings
+        self.params = params
         self.radians_per_elem = None
 
         # initialize fake map for lidar scan simulation
@@ -53,6 +55,9 @@ class GapFollower:
             speed = self.settings['CORNERS_SPEED']
         else:
             speed = self.settings['STRAIGHTS_SPEED']
+
+        if self.settings['ADAPTIVE_CRUISE_CONTROL']:
+            speed = adaptive_cruise_control(scans, speed, self.params['width'])
 
         # visualized the planned trajectory
         if self.settings['VISUALIZE']:
@@ -139,4 +144,5 @@ class GapFollower:
         plt.xlim([x_min, x_max])
         plt.ylim([y_min, y_max])
         plt.legend(loc='upper right')
+        plt.plot(scans)
         plt.pause(0.001)

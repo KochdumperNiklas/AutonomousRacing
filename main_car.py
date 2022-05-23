@@ -16,7 +16,7 @@ from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Float32MultiArray, Bool
 
 CONTROLLER = 'GapFollower'
-RACETRACK = 'OscherslebenICRA'
+RACETRACK = 'ICRA'
 OBSERVER = 'ParticleFilter'
 x0 = np.array([0, 0, -3.14])
 

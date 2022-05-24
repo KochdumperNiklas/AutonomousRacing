@@ -54,7 +54,10 @@ class GapFollower:
         if abs(steering_angle) > self.settings['STRAIGHTS_STEERING_ANGLE']:
             speed = self.settings['CORNERS_SPEED']
         else:
-            speed = self.settings['STRAIGHTS_SPEED']
+            if self.detect_straight(scans, self.params['width']):
+                speed = self.settings['LONG_STRAIGHTS_SPEED']
+            else:
+                speed = self.settings['STRAIGHTS_SPEED']
 
         if self.settings['ADAPTIVE_CRUISE_CONTROL']:
             speed = adaptive_cruise_control(scans, speed, self.params['width'])
@@ -131,6 +134,26 @@ class GapFollower:
         steering_angle = lidar_angle / 2
 
         return steering_angle
+
+    def detect_straight(self, scans, width):
+        """detect if the car is at the long straight and increase the speed if it is"""
+
+        # settings
+        angle = 0
+
+        # transform LiDAR data to a point cloud
+        lidar_data = process_lidar_data(scans)
+
+        # determine points that are in the path of the vehicle
+        tmp = np.dot(np.array([[-np.sin(angle), np.cos(angle)]]), lidar_data)
+        ind = np.where(abs(tmp[0]) < width / 2)[0]
+
+        # determine minimum distance to the vehicle in front
+        tmp = np.dot(np.array([[np.cos(angle), np.sin(angle)]]), lidar_data[:, ind])[0]
+        index = np.where(tmp > 0)
+        dist = np.min(tmp[index[0]])
+
+        return dist > 5
 
     def visualization(self, scans, gap_start, gap_end, best, speed):
         """visualize the planned trajectory"""

@@ -138,22 +138,39 @@ class GapFollower:
     def detect_straight(self, scans, width):
         """detect if the car is at the long straight and increase the speed if it is"""
 
+        # reject large values
+        proc_ranges = scans
+        max_range = False
+
+        for i in range(len(proc_ranges)):
+            if proc_ranges[i] >= self.settings['MAX_LIDAR_DIST']:
+                if not max_range:
+                    start = i
+                    max_range = True
+            elif max_range:
+                end = i
+                proc_ranges[start:end] = proc_ranges[end]
+                max_range = False
+
+        if max_range:
+            proc_ranges[start:] = proc_ranges[start - 1]
+
         # settings
         angle = 0
 
         # transform LiDAR data to a point cloud
-        lidar_data = process_lidar_data(scans)
+        lidar_data = process_lidar_data(proc_ranges)
 
         # determine points that are in the path of the vehicle
         tmp = np.dot(np.array([[-np.sin(angle), np.cos(angle)]]), lidar_data)
-        ind = np.where(abs(tmp[0]) < width / 2)[0]
+        ind = np.where(abs(tmp[0]) < width)[0]
 
         # determine minimum distance to the vehicle in front
         tmp = np.dot(np.array([[np.cos(angle), np.sin(angle)]]), lidar_data[:, ind])[0]
         index = np.where(tmp > 0)
         dist = np.min(tmp[index[0]])
 
-        return dist > 5
+        return dist > 4
 
     def visualization(self, scans, gap_start, gap_end, best, speed):
         """visualize the planned trajectory"""

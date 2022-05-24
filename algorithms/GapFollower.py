@@ -78,7 +78,20 @@ class GapFollower:
                     np.ones(self.settings['PREPROCESS_CONV_SIZE']), 'same') / self.settings['PREPROCESS_CONV_SIZE']
 
         # reject large values
-        proc_ranges = np.clip(proc_ranges, 0, self.settings['MAX_LIDAR_DIST'])
+        max_range = False
+
+        for i in range(len(proc_ranges)):
+            if proc_ranges[i] >= self.settings['MAX_LIDAR_DIST']:
+                if not max_range:
+                    start = i
+                    max_range = True
+            elif max_range:
+                end = i
+                proc_ranges[start:end] = proc_ranges[end]
+                max_range = False
+
+        if max_range:
+            proc_ranges[start:] = proc_ranges[start-1]
 
         return proc_ranges
 
@@ -144,5 +157,4 @@ class GapFollower:
         plt.xlim([x_min, x_max])
         plt.ylim([y_min, y_max])
         plt.legend(loc='upper right')
-        plt.plot(scans)
         plt.pause(0.001)

@@ -15,6 +15,7 @@ class GapFollower:
         self.settings = settings
         self.params = params
         self.radians_per_elem = None
+        self.long_straight_cnt = 0
 
         # initialize fake map for lidar scan simulation
         if settings['FAKE_MAP'] == "":
@@ -53,11 +54,17 @@ class GapFollower:
 
         if abs(steering_angle) > self.settings['STRAIGHTS_STEERING_ANGLE']:
             speed = self.settings['CORNERS_SPEED']
+            self.long_straight_cnt = 0
         else:
             if self.detect_straight(scans, self.params['width']):
-                speed = self.settings['LONG_STRAIGHTS_SPEED']
+                self.long_straight_cnt += 1
+                if self.long_straight_cnt > 20:
+                    speed = self.settings['LONG_STRAIGHTS_SPEED']
+                else:
+                    speed = self.settings['STRAIGHTS_SPEED']
             else:
                 speed = self.settings['STRAIGHTS_SPEED']
+                self.long_straight_cnt = 0
 
         if self.settings['ADAPTIVE_CRUISE_CONTROL']:
             speed = adaptive_cruise_control(scans, speed, self.params['width'])
@@ -136,41 +143,25 @@ class GapFollower:
         return steering_angle
 
     def detect_straight(self, scans, width):
-        """detect if the car is at the long straight and increase the speed if it is"""
-
-        # reject large values
-        proc_ranges = scans
-        max_range = False
-
-        for i in range(len(proc_ranges)):
-            if proc_ranges[i] >= self.settings['MAX_LIDAR_DIST']:
-                if not max_range:
-                    start = i
-                    max_range = True
-            elif max_range:
-                end = i
-                proc_ranges[start:end] = proc_ranges[end]
-                max_range = False
-
-        if max_range:
-            proc_ranges[start:] = proc_ranges[start - 1]
-
-        # settings
-        angle = 0
+        """detect if the car is at a long straight or not"""
 
         # transform LiDAR data to a point cloud
-        lidar_data = process_lidar_data(proc_ranges)
+        lidar_data = process_lidar_data(scans)
 
-        # determine points that are in the path of the vehicle
-        tmp = np.dot(np.array([[-np.sin(angle), np.cos(angle)]]), lidar_data)
-        ind = np.where(abs(tmp[0]) < width)[0]
+        # reject large values
+        ind = np.where(scans < self.settings['MAX_LIDAR_DIST'])
+        lidar_data = lidar_data[:, ind[0]]
 
-        # determine minimum distance to the vehicle in front
-        tmp = np.dot(np.array([[np.cos(angle), np.sin(angle)]]), lidar_data[:, ind])[0]
-        index = np.where(tmp > 0)
-        dist = np.min(tmp[index[0]])
+        # divide data into left and right boundary
+        ind_left = np.where(lidar_data[1, :] < 0)[0]
+        ind_right = np.where(lidar_data[1, :] > 0)[0]
 
-        return dist > 4
+        # compute maximum deviation from two parallel lines
+        dev_left = np.max(abs(lidar_data[1, ind_left] - np.mean(lidar_data[1, ind_left])))
+        dev_right = np.max(abs(lidar_data[1, ind_right] - np.mean(lidar_data[1, ind_right])))
+
+        return dev_left < 0.2 and dev_right < 0.2
+
 
     def visualization(self, scans, gap_start, gap_end, best, speed):
         """visualize the planned trajectory"""

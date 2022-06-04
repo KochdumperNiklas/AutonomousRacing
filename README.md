@@ -8,7 +8,11 @@ The simulation environment also supports head-to-head racing of two racecars.
 
 ## Installation
 
-For the simulation environment it is required that the F1tenth gym https://github.com/f1tenth/f1tenth_gym is installed.
+For the simulation environment it is required that the F1tenth gym https://github.com/f1tenth/f1tenth_gym is installed. All other required python packages can be installed by running
+
+`pip install -r requirements.txt`
+
+in the command line.
 
 ## Adding New Controllers
 
@@ -16,7 +20,7 @@ Every controller should be implemented as an own class with constructor syntax
 
 `__init__(self, params, settings)`
 
-where `params` is a dictionary containing the vehicle parameter (widht, length, mass, etc.), and `settings` is a dictionary 
+where `params` is a dictionary containing the vehicle parameter (width, length, mass, etc.), and `settings` is a dictionary 
 containing the parsed algorithm settings read from the corresponding *CONTROLLER.cfg* file. A config-file that defines valid values 
 for the algorithm has to be provided in the directory *settings*. Moreover, each controller class has to implement the function 
 
